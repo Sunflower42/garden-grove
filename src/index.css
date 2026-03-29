@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #FDF6E9;
+  --color-cream-dark: #F5E6CC;
+  --color-parchment: #F0E4D0;
+  --color-sage: #8B9E7E;
+  --color-sage-light: #A8B99C;
+  --color-sage-dark: #6B7E5E;
+  --color-forest: #2D4A2D;
+  --color-forest-deep: #1A2E1A;
+  --color-terra: #C17644;
+  --color-terra-light: #D4956A;
+  --color-terra-dark: #9E5A2E;
+  --color-amber: #D4A24E;
+  --color-amber-light: #E8C47A;
+  --color-moss: #4A5E3A;
+  --color-soil: #5C4033;
+  --color-soil-light: #7A5C4A;
+  --color-bloom-pink: #D4869C;
+  --color-bloom-purple: #8B6AAE;
+  --color-bloom-yellow: #E8C84A;
+  --color-bloom-red: #C4544A;
+  --color-bloom-blue: #6A8EAE;
+  --color-bloom-white: #F5F0E8;
+  --color-midnight: #0F1A0F;
+  --color-midnight-green: #152015;
+  --color-midnight-sage: #1E2E1E;
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-sage);
+  border-radius: 99px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-sage-dark); }
+.dark ::-webkit-scrollbar-thumb { background: var(--color-sage-dark); }
+.dark ::-webkit-scrollbar-thumb:hover { background: var(--color-sage); }
+
+/* Focus ring utility */
+*:focus-visible {
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Selection color */
+::selection {
+  background: rgba(139, 158, 126, 0.3);
+  color: var(--color-forest-deep);
+}
+
+.grain-texture {
+  position: relative;
+}
+.grain-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+.garden-grid {
+  background-image:
+    linear-gradient(rgba(139,158,126,0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,158,126,0.12) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Animations */
+@keyframes sprout {
+  0% { transform: scale(0.2) translateY(12px); opacity: 0; }
+  60% { transform: scale(1.05) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes sway {
+  0%, 100% { transform: rotate(-1.5deg); }
+  50% { transform: rotate(1.5deg); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-sprout {
+  animation: sprout 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.animate-sway {
+  animation: sway 4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.animate-fade-up {
+  animation: fadeUp 0.5s ease-out forwards;
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Companion planting indicators */
+.companion-good {
+  box-shadow: 0 0 12px rgba(139,158,126,0.5), 0 0 24px rgba(139,158,126,0.2);
+}
+.companion-bad {
+  box-shadow: 0 0 12px rgba(196,84,74,0.5), 0 0 24px rgba(196,84,74,0.2);
+}
+
+/* Toolbar styling */
+.toolbar {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Badge / pill component */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
