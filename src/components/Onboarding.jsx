@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store';
 import { lookupZone, parseLocalDate } from '../data/zones';
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft, MapPin } from 'lucide-react';
 import YardMapPicker from './YardMapPicker';
 
 const SOIL_TYPES = [
@@ -129,20 +129,106 @@ function StepDots({ step }) {
 }
 
 export default function Onboarding() {
-  const { dispatch } = useStore();
-  const [step, setStep] = useState(0);
+  const { state: appState, dispatch } = useStore();
+  const startStep = appState.onboardingStartStep || 0;
+  const [step, setStep] = useState(startStep);
   const [address, setAddress] = useState('');
-  const [zipCode, setZipCode] = useState('');
+  const [zipCode, setZipCode] = useState(startStep > 0 ? (appState.zipCode || '') : '');
   const [geocoded, setGeocoded] = useState(null); // { lat, lng }
-  const [zoneData, setZoneData] = useState(null);
-  const [soilType, setSoilType] = useState('loam');
-  const [sunExposure, setSunExposure] = useState('full');
-  const [yardWidth, setYardWidth] = useState(80);
-  const [yardHeight, setYardHeight] = useState(60);
+  const [zoneData, setZoneData] = useState(
+    startStep > 0 && appState.zone ? { zone: appState.zone, lastFrost: appState.lastFrostMMDD, firstFrost: appState.firstFrostMMDD } : null
+  );
+  const [soilType, setSoilType] = useState(appState.soilType || 'loam');
+  const [sunExposure, setSunExposure] = useState(appState.sunExposure || 'full');
+  const [yardWidth, setYardWidth] = useState(appState.yardWidthFt || 80);
+  const [yardHeight, setYardHeight] = useState(appState.yardHeightFt || 60);
   const [yardPolygon, setYardPolygon] = useState(null); // [{x,y}] in feet
   const [housePolygon, setHousePolygon] = useState(null); // [{x,y}] in feet
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
+
+  // When jumping to yard step, geocode from existing zip code
+  useEffect(() => {
+    if (startStep >= 2 && appState.zipCode && !geocoded) {
+      (async () => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(appState.zipCode)}&limit=1&countrycodes=us`,
+            { headers: { 'User-Agent': 'GardenGrove/1.0' } }
+          );
+          const data = await res.json();
+          if (data.length > 0) {
+            setGeocoded({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
+          }
+        } catch {}
+      })();
+    }
+  }, [startStep, appState.zipCode, geocoded]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef(null);
+  const suggestionsRef = useRef(null);
+
+  // Debounced autocomplete lookup
+  useEffect(() => {
+    if (address.length < 4) {
+      setSuggestions([]);
+      return;
+    }
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=5&countrycodes=us&addressdetails=1`,
+          { headers: { 'User-Agent': 'GardenGrove/1.0' } }
+        );
+        const data = await res.json();
+        setSuggestions(data);
+        setShowSuggestions(data.length > 0);
+      } catch {
+        // Silently fail — autocomplete is a convenience
+      }
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [address]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('touchstart', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('touchstart', handleClick);
+    };
+  }, []);
+
+  const selectSuggestion = (result) => {
+    setAddress(result.display_name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    finalizeLookup(result);
+  };
+
+  const finalizeLookup = (result) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    setGeocoded({ lat, lng });
+
+    const zip = result.address?.postcode?.slice(0, 5);
+    if (zip && /^\d{5}$/.test(zip)) {
+      setZipCode(zip);
+      const zData = lookupZone(zip);
+      setZoneData(zData);
+      setStep(1);
+    } else {
+      setError('Could not determine zip code. Try a more specific address.');
+    }
+  };
 
   const handleAddressLookup = async () => {
     if (!address.trim()) {
@@ -151,6 +237,7 @@ export default function Onboarding() {
     }
     setSearching(true);
     setError('');
+    setShowSuggestions(false);
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&countrycodes=us&addressdetails=1`,
@@ -162,23 +249,8 @@ export default function Onboarding() {
         setSearching(false);
         return;
       }
-      const result = data[0];
-      const lat = parseFloat(result.lat);
-      const lng = parseFloat(result.lon);
-      setGeocoded({ lat, lng });
-
-      // Extract zip code from address details
-      const zip = result.address?.postcode?.slice(0, 5);
-      if (zip && /^\d{5}$/.test(zip)) {
-        setZipCode(zip);
-        const zData = lookupZone(zip);
-        setZoneData(zData);
-        setSearching(false);
-        setStep(1); // skip to conditions (was step 2, now step 1)
-      } else {
-        setError('Could not determine zip code. Try a more specific address.');
-        setSearching(false);
-      }
+      finalizeLookup(data[0]);
+      setSearching(false);
     } catch {
       setError('Search failed. Please check your connection and try again.');
       setSearching(false);
@@ -271,16 +343,33 @@ export default function Onboarding() {
                     <h2 className="font-display text-3xl font-light text-cream">Where's my garden?</h2>
                     <p className="text-cream/40 mt-4 text-sm leading-relaxed">We'll find the hardiness zone, frost dates, and satellite view</p>
                   </div>
-                  <div style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
+                  <div style={{ paddingTop: '1.5rem', paddingBottom: '1.5rem' }} ref={suggestionsRef} className="relative">
                     <input
                       type="text"
                       value={address}
-                      onChange={e => setAddress(e.target.value)}
+                      onChange={e => { setAddress(e.target.value); setShowSuggestions(true); }}
                       onKeyDown={e => e.key === 'Enter' && handleAddressLookup()}
+                      onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                       placeholder="Enter my address"
                       className="w-full px-6 py-5 text-center text-lg font-display bg-white/[0.12] border border-cream/25 rounded-2xl text-cream placeholder:text-cream/30 focus:border-cream/40 focus:bg-white/[0.15] focus:outline-none focus:ring-1 focus:ring-cream/20 transition-all"
                       autoFocus
                     />
+                    {/* Autocomplete suggestions */}
+                    {showSuggestions && suggestions.length > 0 && (
+                      <div className="absolute z-50 left-0 right-0 bg-[#2D4A2D] border border-cream/15 rounded-xl shadow-2xl shadow-black/40 overflow-hidden" style={{ marginTop: 8 }}>
+                        {suggestions.map((s, i) => (
+                          <button
+                            key={s.place_id || i}
+                            onClick={() => selectSuggestion(s)}
+                            className="w-full flex items-start gap-3 text-left hover:bg-cream/10 transition-colors"
+                            style={{ padding: '12px 16px' }}
+                          >
+                            <MapPin className="w-4 h-4 text-cream/30 shrink-0" style={{ marginTop: 2 }} />
+                            <span className="text-sm text-cream/80 leading-snug">{s.display_name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {error && <p className="text-bloom-pink text-xs text-center mt-3 animate-fade-up">{error}</p>}
                   </div>
                   <button

@@ -189,7 +189,7 @@ export default function Sidebar() {
           >
             <LogOut className="w-4 h-4" />
             <span>Sign Out</span>
-            <span className="ml-auto text-[10px] text-sage/60 dark:text-sage-dark/60 truncate max-w-[100px]">{user.email}</span>
+            <span className="ml-auto text-[10px] text-sage/60 dark:text-sage-dark/60 truncate max-w-[100px]">{user.phone || user.email}</span>
           </button>
         )}
         </div>

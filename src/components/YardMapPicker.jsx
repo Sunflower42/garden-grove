@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, Polygon, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Search, MapPin, Move, Plus, Minus, Home, Fence } from 'lucide-react';
+import { Search, MapPin, Move, Plus, Minus, Home, Fence, Undo2 } from 'lucide-react';
 
 // Haversine-based distance in feet between two lat/lng points
 function distanceFt(lat1, lng1, lat2, lng2) {
@@ -90,46 +90,117 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
   const map = useMap();
   const dragging = useRef(null);
 
+  // Larger hit targets and handles on touch devices
+  const isTouch = 'ontouchstart' in window;
+  const hitRadius = isTouch ? 24 : 14;
+  const edgeHitRadius = isTouch ? 18 : 10;
+
+  // Shared logic for starting a drag (mouse or touch)
+  const handlePointerDown = useCallback((latlng, originalEvent) => {
+    if (!isActive || !vertices || vertices.length === 0) return;
+    const pixel = map.latLngToContainerPoint(latlng);
+
+    // Check if touching a vertex
+    for (let i = 0; i < vertices.length; i++) {
+      const vp = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
+      if (Math.abs(pixel.x - vp.x) < hitRadius && Math.abs(pixel.y - vp.y) < hitRadius) {
+        originalEvent.stopPropagation();
+        originalEvent.preventDefault();
+        dragging.current = { vertexIndex: i };
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        map.doubleClickZoom.disable();
+        if (map.touchZoom) map.touchZoom.disable();
+        return;
+      }
+    }
+
+    // Check if touching near an edge (to add a point)
+    for (let i = 0; i < vertices.length; i++) {
+      const j = (i + 1) % vertices.length;
+      const ap = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
+      const bp = map.latLngToContainerPoint(L.latLng(vertices[j][0], vertices[j][1]));
+      const cp = closestPointOnSegment(pixel.x, pixel.y, ap.x, ap.y, bp.x, bp.y);
+      const dist = Math.sqrt((pixel.x - cp.x) ** 2 + (pixel.y - cp.y) ** 2);
+      if (dist < edgeHitRadius && cp.t > 0.1 && cp.t < 0.9) {
+        originalEvent.stopPropagation();
+        originalEvent.preventDefault();
+        const newVert = [latlng.lat, latlng.lng];
+        const newVertices = [...vertices];
+        newVertices.splice(j, 0, newVert);
+        onChange(newVertices);
+        dragging.current = { vertexIndex: j };
+        map.dragging.disable();
+        map.scrollWheelZoom.disable();
+        map.doubleClickZoom.disable();
+        if (map.touchZoom) map.touchZoom.disable();
+        return;
+      }
+    }
+  }, [isActive, vertices, onChange, map, hitRadius, edgeHitRadius]);
+
+  const handlePointerMove = useCallback((latlng) => {
+    if (!dragging.current) return;
+    const { vertexIndex } = dragging.current;
+    const newVertices = [...vertices];
+    newVertices[vertexIndex] = [latlng.lat, latlng.lng];
+    onChange(newVertices);
+  }, [vertices, onChange]);
+
+  const handlePointerUp = useCallback(() => {
+    if (dragging.current) {
+      dragging.current = null;
+      map.dragging.enable();
+      map.scrollWheelZoom.enable();
+      if (map.touchZoom) map.touchZoom.enable();
+      setTimeout(() => map.doubleClickZoom.enable(), 300);
+      map.getContainer().style.cursor = '';
+    }
+  }, [map]);
+
+  // Attach touch events directly to the map container for reliable iPad support
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const onTouchStart = (e) => {
+      if (!isActive || !vertices || vertices.length === 0) return;
+      if (e.touches.length !== 1) return; // only single-finger
+      const touch = e.touches[0];
+      const rect = container.getBoundingClientRect();
+      const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+      const latlng = map.containerPointToLatLng(point);
+      handlePointerDown(latlng, e);
+    };
+
+    const onTouchMove = (e) => {
+      if (!dragging.current) return;
+      if (e.touches.length !== 1) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const rect = container.getBoundingClientRect();
+      const point = L.point(touch.clientX - rect.left, touch.clientY - rect.top);
+      const latlng = map.containerPointToLatLng(point);
+      handlePointerMove(latlng);
+    };
+
+    const onTouchEnd = () => {
+      handlePointerUp();
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [map, isActive, vertices, handlePointerDown, handlePointerMove, handlePointerUp]);
+
   useMapEvents({
     mousedown(e) {
-      if (!isActive || !vertices || vertices.length === 0) return;
-      const pixel = map.latLngToContainerPoint(e.latlng);
-
-      // Check if clicking on a vertex
-      for (let i = 0; i < vertices.length; i++) {
-        const vp = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
-        if (Math.abs(pixel.x - vp.x) < 14 && Math.abs(pixel.y - vp.y) < 14) {
-          e.originalEvent.stopPropagation();
-          e.originalEvent.preventDefault();
-          dragging.current = { vertexIndex: i };
-          map.dragging.disable();
-          map.scrollWheelZoom.disable();
-          map.doubleClickZoom.disable();
-          return;
-        }
-      }
-
-      // Check if clicking near an edge (to add a point)
-      for (let i = 0; i < vertices.length; i++) {
-        const j = (i + 1) % vertices.length;
-        const ap = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
-        const bp = map.latLngToContainerPoint(L.latLng(vertices[j][0], vertices[j][1]));
-        const cp = closestPointOnSegment(pixel.x, pixel.y, ap.x, ap.y, bp.x, bp.y);
-        const dist = Math.sqrt((pixel.x - cp.x) ** 2 + (pixel.y - cp.y) ** 2);
-        if (dist < 10 && cp.t > 0.1 && cp.t < 0.9) {
-          e.originalEvent.stopPropagation();
-          e.originalEvent.preventDefault();
-          const newVert = [e.latlng.lat, e.latlng.lng];
-          const newVertices = [...vertices];
-          newVertices.splice(j, 0, newVert);
-          onChange(newVertices);
-          dragging.current = { vertexIndex: j };
-          map.dragging.disable();
-          map.scrollWheelZoom.disable();
-          map.doubleClickZoom.disable();
-          return;
-        }
-      }
+      handlePointerDown(e.latlng, e.originalEvent);
     },
     mousemove(e) {
       if (!dragging.current) {
@@ -139,7 +210,7 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
 
         for (let i = 0; i < vertices.length; i++) {
           const vp = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
-          if (Math.abs(pixel.x - vp.x) < 14 && Math.abs(pixel.y - vp.y) < 14) {
+          if (Math.abs(pixel.x - vp.x) < hitRadius && Math.abs(pixel.y - vp.y) < hitRadius) {
             container.style.cursor = 'grab';
             return;
           }
@@ -151,7 +222,7 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
           const bp = map.latLngToContainerPoint(L.latLng(vertices[j][0], vertices[j][1]));
           const cp = closestPointOnSegment(pixel.x, pixel.y, ap.x, ap.y, bp.x, bp.y);
           const dist = Math.sqrt((pixel.x - cp.x) ** 2 + (pixel.y - cp.y) ** 2);
-          if (dist < 10 && cp.t > 0.1 && cp.t < 0.9) {
+          if (dist < edgeHitRadius && cp.t > 0.1 && cp.t < 0.9) {
             container.style.cursor = 'crosshair';
             return;
           }
@@ -161,27 +232,20 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
         return;
       }
 
-      const { vertexIndex } = dragging.current;
-      const newVertices = [...vertices];
-      newVertices[vertexIndex] = [e.latlng.lat, e.latlng.lng];
-      onChange(newVertices);
+      handlePointerMove(e.latlng);
     },
     mouseup() {
-      if (dragging.current) {
-        dragging.current = null;
-        map.dragging.enable();
-        map.scrollWheelZoom.enable();
-        setTimeout(() => map.doubleClickZoom.enable(), 300);
-        map.getContainer().style.cursor = '';
-      }
+      handlePointerUp();
     },
     contextmenu(e) {
+      // Only allow vertex deletion via right-click on non-touch devices
+      if (isTouch) { e.originalEvent.preventDefault(); return; }
       if (!isActive || !vertices || vertices.length <= 3) return;
       e.originalEvent.preventDefault();
       const pixel = map.latLngToContainerPoint(e.latlng);
       for (let i = 0; i < vertices.length; i++) {
         const vp = map.latLngToContainerPoint(L.latLng(vertices[i][0], vertices[i][1]));
-        if (Math.abs(pixel.x - vp.x) < 14 && Math.abs(pixel.y - vp.y) < 14) {
+        if (Math.abs(pixel.x - vp.x) < hitRadius && Math.abs(pixel.y - vp.y) < hitRadius) {
           const newVerts = vertices.filter((_, idx) => idx !== i);
           onChange(newVerts);
           return;
@@ -214,7 +278,7 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
         <CircleMarker
           key={`v-${i}`}
           center={v}
-          radius={6}
+          radius={isTouch ? 10 : 6}
           pathOptions={{
             color,
             weight: 2,
@@ -228,7 +292,7 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
         <CircleMarker
           key={`m-${i}`}
           center={m}
-          radius={3}
+          radius={isTouch ? 6 : 3}
           pathOptions={{
             color,
             weight: 1,
@@ -333,6 +397,7 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
       setCenter([lat, lng]);
+      hasFlewTo.current = false; // allow re-centering on new search
       setYardVertices(createInitialPolygon(lat, lng, initialWidth || 80, initialHeight || 60));
       setHouseVertices(createInitialHouse(lat, lng));
     } catch {
@@ -355,36 +420,33 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Only show search if no pre-loaded center */}
-      {!initialCenter && (
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/40 mb-2.5 block">
-            Look Up Address
-          </label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={address}
-                onChange={e => setAddress(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="123 Main St, City, State"
-                className="w-full px-4 py-3 pr-10 text-sm bg-white/[0.08] border border-cream/20 rounded-xl text-cream placeholder:text-cream/25 focus:border-cream/35 focus:bg-white/[0.12] focus:outline-none focus:ring-1 focus:ring-cream/15 transition-all"
-              />
-              <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/20" />
-            </div>
-            <button
-              onClick={handleSearch}
-              disabled={searching || !address.trim()}
-              className="px-4 py-3 bg-cream/15 border border-cream/20 text-cream text-xs font-medium rounded-xl hover:bg-cream/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              <Search className="w-3.5 h-3.5" />
-              {searching ? '...' : 'Find'}
-            </button>
+      <div>
+        <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/40 mb-2.5 block">
+          {center ? 'Wrong spot? Search again' : 'Look Up Address'}
+        </label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              placeholder="123 Main St, City, State"
+              className="w-full px-4 py-3 pr-10 text-sm bg-white/[0.08] border border-cream/20 rounded-xl text-cream placeholder:text-cream/25 focus:border-cream/35 focus:bg-white/[0.12] focus:outline-none focus:ring-1 focus:ring-cream/15 transition-all"
+            />
+            <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/20" />
           </div>
-          {error && <p className="text-bloom-pink text-xs mt-2">{error}</p>}
+          <button
+            onClick={handleSearch}
+            disabled={searching || !address.trim()}
+            className="px-4 py-3 bg-cream/15 border border-cream/20 text-cream text-xs font-medium rounded-xl hover:bg-cream/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
+          >
+            <Search className="w-3.5 h-3.5" />
+            {searching ? '...' : 'Find'}
+          </button>
         </div>
-      )}
+        {error && <p className="text-bloom-pink text-xs mt-2">{error}</p>}
+      </div>
 
       {/* Layer toggle */}
       {center && (
@@ -416,7 +478,7 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
 
       {/* Map */}
       {center && (
-        <div className="relative rounded-2xl overflow-hidden border border-cream/15" style={{ height: 320 }}>
+        <div className="relative rounded-2xl overflow-hidden border border-cream/15" style={{ height: 'min(70vh, 560px)' }}>
           <MapContainer
             center={center}
             zoom={19}
@@ -462,12 +524,32 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
               <Move className="w-3 h-3" /> Drag points to reshape
             </div>
             <div className="flex items-center gap-1.5">
-              <Plus className="w-3 h-3" /> Click an edge to add a point
+              <Plus className="w-3 h-3" /> Tap an edge to add a point
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 hidden md:flex">
               <Minus className="w-3 h-3" /> Right-click a point to remove
             </div>
           </div>
+          {/* Remove last point button — especially useful on touch */}
+          {(() => {
+            const verts = activeLayer === 'house' ? houseVertices : yardVertices;
+            if (!verts || verts.length <= 3) return null;
+            return (
+              <button
+                onClick={() => {
+                  if (activeLayer === 'house') {
+                    setHouseVertices(houseVertices.slice(0, -1));
+                  } else {
+                    setYardVertices(yardVertices.slice(0, -1));
+                  }
+                }}
+                className="absolute bottom-3 right-3 z-[1000] bg-black/60 backdrop-blur-sm text-cream/80 text-xs px-3 py-2 rounded-xl border border-cream/15 flex items-center gap-1.5 hover:bg-black/80 active:bg-black/80 transition-colors"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                Remove last point
+              </button>
+            );
+          })()}
         </div>
       )}
     </div>

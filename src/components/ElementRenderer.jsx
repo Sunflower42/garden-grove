@@ -147,6 +147,110 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             }
           })}
         </g>
+      ) : element.id === 'patio-paver' ? (
+        // Paver patio — grid of pavers
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.85} />
+          {Array.from({ length: Math.max(1, Math.floor(w / 12)) }).map((_, col) =>
+            Array.from({ length: Math.max(1, Math.floor(h / 12)) }).map((_, row) => (
+              <rect
+                key={`${col}-${row}`}
+                x={px + 1.5 + col * (w / Math.max(1, Math.floor(w / 12)))}
+                y={py + 1.5 + row * (h / Math.max(1, Math.floor(h / 12)))}
+                width={w / Math.max(1, Math.floor(w / 12)) - 3}
+                height={h / Math.max(1, Math.floor(h / 12)) - 3}
+                fill={element.borderColor}
+                opacity={0.2}
+                rx={1}
+              />
+            ))
+          )}
+        </g>
+      ) : element.id === 'patio-concrete' ? (
+        // Concrete patio — subtle broom finish lines
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.85} />
+          {Array.from({ length: Math.max(1, Math.floor(w / 6)) }).map((_, i) => (
+            <line key={i} x1={px + 3 + i * 6} y1={py + 1} x2={px + 3 + i * 6} y2={py + h - 1}
+              stroke={element.borderColor} strokeWidth={0.3} opacity={0.3} />
+          ))}
+        </g>
+      ) : element.id === 'deck-wood' ? (
+        // Wood deck — planks
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.85} />
+          {Array.from({ length: Math.max(1, Math.floor(h / 8)) }).map((_, i) => (
+            <line key={i} x1={px + 1} y1={py + 2 + i * 8} x2={px + w - 1} y2={py + 2 + i * 8}
+              stroke={element.borderColor} strokeWidth={0.7} opacity={0.4} />
+          ))}
+        </g>
+      ) : element.id === 'fire-pit' ? (
+        // Fire pit — ring with inner glow
+        <g>
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2} fill={element.color} stroke={element.borderColor} strokeWidth={2} opacity={0.85} />
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.3} ry={h * 0.3} fill="#4A2A1A" opacity={0.6} />
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.15} ry={h * 0.15} fill="#D4644A" opacity={0.4} />
+        </g>
+      ) : element.id === 'garden-bench' || element.id === 'swing' ? (
+        // Bench / swing — seat plank + backrest
+        <g>
+          <rect x={px} y={py + h * 0.4} width={w} height={h * 0.6} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.85} />
+          {/* Backrest */}
+          <rect x={px + 2} y={py} width={w - 4} height={h * 0.35} fill={element.color} stroke={element.borderColor} strokeWidth={1} rx={2} opacity={0.7} />
+          {/* Slats */}
+          {[0.25, 0.5, 0.75].map((t, i) => (
+            <line key={i} x1={px + w * t} y1={py + h * 0.4} x2={px + w * t} y2={py + h} stroke={element.borderColor} strokeWidth={0.5} opacity={0.4} />
+          ))}
+        </g>
+      ) : element.id === 'adirondack-chair' ? (
+        // Adirondack — wide seat, fan back
+        <g>
+          {/* Seat */}
+          <rect x={px + w * 0.05} y={py + h * 0.5} width={w * 0.9} height={h * 0.5} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.85} />
+          {/* Fan backrest */}
+          <path
+            d={`M ${px + w * 0.1} ${py + h * 0.5} L ${px + w * 0.15} ${py + 2} Q ${px + w / 2} ${py - h * 0.05} ${px + w * 0.85} ${py + 2} L ${px + w * 0.9} ${py + h * 0.5}`}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1} opacity={0.7}
+          />
+          {/* Armrests */}
+          <rect x={px} y={py + h * 0.45} width={w * 0.12} height={h * 0.35} fill={element.borderColor} rx={1} opacity={0.5} />
+          <rect x={px + w * 0.88} y={py + h * 0.45} width={w * 0.12} height={h * 0.35} fill={element.borderColor} rx={1} opacity={0.5} />
+        </g>
+      ) : element.id === 'hammock' ? (
+        // Hammock — curved fabric between two posts
+        <g>
+          {/* Posts */}
+          <rect x={px + w * 0.1} y={py} width={w * 0.15} height={h * 0.08} fill={element.borderColor} rx={1} opacity={0.7} />
+          <rect x={px + w * 0.1} y={py + h * 0.92} width={w * 0.15} height={h * 0.08} fill={element.borderColor} rx={1} opacity={0.7} />
+          {/* Fabric sag */}
+          <path
+            d={`M ${px + w * 0.15} ${py + h * 0.06} Q ${px + w * 0.9} ${py + h * 0.5} ${px + w * 0.15} ${py + h * 0.94}`}
+            fill="none" stroke={element.color} strokeWidth={w * 0.7} strokeLinecap="round" opacity={0.6}
+          />
+          <path
+            d={`M ${px + w * 0.15} ${py + h * 0.06} Q ${px + w * 0.9} ${py + h * 0.5} ${px + w * 0.15} ${py + h * 0.94}`}
+            fill="none" stroke={element.borderColor} strokeWidth={1} opacity={0.5}
+          />
+        </g>
+      ) : element.id === 'patio-dining' ? (
+        // Patio dining — round table + 4 chair dots
+        <g>
+          {/* Table */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.3} ry={h * 0.3} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} opacity={0.85} />
+          {/* Chairs at N/S/E/W */}
+          {[[0.5, 0.08], [0.5, 0.92], [0.08, 0.5], [0.92, 0.5]].map(([tx, ty], i) => (
+            <rect key={i} x={px + w * tx - w * 0.09} y={py + h * ty - h * 0.09} width={w * 0.18} height={h * 0.18} fill={element.borderColor} rx={2} opacity={0.6} />
+          ))}
+        </g>
+      ) : element.id === 'bistro-set' ? (
+        // Bistro — small round table + 2 chairs
+        <g>
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.22} ry={h * 0.22} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} opacity={0.85} />
+          {/* Two chairs */}
+          {[[0.5, 0.05], [0.5, 0.95]].map(([tx, ty], i) => (
+            <circle key={i} cx={px + w * tx} cy={py + h * ty} r={w * 0.12} fill={element.borderColor} opacity={0.55} />
+          ))}
+        </g>
       ) : (
         // Default rectangle
         <rect

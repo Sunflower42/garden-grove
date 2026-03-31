@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
 import { lookupZone, parseLocalDate } from '../data/zones';
-import { X, MapPin, Save, RotateCcw } from 'lucide-react';
+import { X, MapPin, Save, RotateCcw, Map } from 'lucide-react';
 
 const SOIL_TYPES = [
   { id: 'sandy', label: 'Sandy' },
@@ -201,6 +201,13 @@ export default function SettingsPanel({ onClose }) {
                 className="px-3.5 py-2.5 border border-sage/15 dark:border-sage-dark/20 rounded-xl bg-white/80 dark:bg-midnight-sage/80 text-sm text-center text-forest-deep dark:text-cream focus:border-sage dark:focus:border-sage focus:outline-none focus:ring-1 focus:ring-sage/20 transition-all"
                 placeholder="Depth" />
             </div>
+            <button
+              onClick={() => { dispatch({ type: 'EDIT_YARD' }); onClose(); }}
+              className="w-full mt-3 px-4 py-2.5 border border-sage/15 dark:border-sage-dark/20 rounded-xl text-xs font-medium text-forest-deep dark:text-cream hover:bg-sage/8 dark:hover:bg-sage/10 transition-all flex items-center justify-center gap-2"
+            >
+              <Map className="w-3.5 h-3.5" />
+              Edit Yard & House Outlines
+            </button>
           </div>
 
           {/* Soil Type */}

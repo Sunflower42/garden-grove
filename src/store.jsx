@@ -32,6 +32,7 @@ const initialState = {
   yardHeightFt: 60,
   yardPolygon: null, // [{x, y}] in feet — null means rectangle
   housePolygon: null, // [{x, y}] in feet — outline of the house
+  houseFeatures: [], // [{ id, type: 'door'|'window'|'garage-door', edgeIndex, t, widthFt }]
 
   // Yard-level elements (paths, pots, etc.) — positioned in yard-feet coords
   yardElements: [], // [{ id, elementId, x, y, width, height }]
@@ -419,7 +420,10 @@ function reducer(state, action) {
     }
 
     case 'RERUN_SETUP':
-      return { ...state, onboardingComplete: false };
+      return { ...state, onboardingComplete: false, onboardingStartStep: 0 };
+
+    case 'EDIT_YARD':
+      return { ...state, onboardingComplete: false, onboardingStartStep: 2 };
 
     // Yard-level elements
     case 'PLACE_YARD_ELEMENT': {
@@ -449,6 +453,36 @@ function reducer(state, action) {
         ...state,
         yardElements: state.yardElements.filter(el => el.id !== action.payload),
       };
+    }
+    case 'ADD_HOUSE_FEATURE': {
+      const { type, edgeIndex, t, widthFt } = action.payload;
+      const feat = {
+        id: `hf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        type, edgeIndex, t, widthFt,
+      };
+      return { ...state, houseFeatures: [...state.houseFeatures, feat] };
+    }
+    case 'UPDATE_HOUSE_FEATURE': {
+      const { id, ...updates } = action.payload;
+      return {
+        ...state,
+        houseFeatures: state.houseFeatures.map(f => f.id === id ? { ...f, ...updates } : f),
+      };
+    }
+    case 'REMOVE_HOUSE_FEATURE': {
+      return {
+        ...state,
+        houseFeatures: state.houseFeatures.filter(f => f.id !== action.payload),
+      };
+    }
+    case 'UPDATE_HOUSE_POLYGON': {
+      return { ...state, housePolygon: action.payload };
+    }
+    case 'ADD_HOUSE_VERTEX': {
+      const { index, point } = action.payload;
+      const newPoly = [...state.housePolygon];
+      newPoly.splice(index, 0, point);
+      return { ...state, housePolygon: newPoly };
     }
 
     case 'LOAD_CLOUD_STATE':
@@ -493,11 +527,8 @@ export function StoreProvider({ children }) {
           // Cloud data exists — use it
           dispatch({ type: 'LOAD_CLOUD_STATE', payload: data.state });
         } else {
-          // New user or empty cloud — upload current localStorage state
-          const local = loadState();
-          if (local.onboardingComplete) {
-            debouncedCloudSave(user.id, local);
-          }
+          // New user with empty cloud — start fresh
+          dispatch({ type: 'RESET' });
         }
       } catch (err) {
         console.error('Garden Grove: Cloud sync error:', err);

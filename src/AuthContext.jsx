@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
 
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut();
+    localStorage.removeItem('garden-grove-state');
     setUser(null);
   };
 

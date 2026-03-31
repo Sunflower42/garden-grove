@@ -92,6 +92,12 @@ export default function YardView() {
   const [resizingYardElement, setResizingYardElement] = useState(null); // { id, handle, startX, startY, startW, startH }
   const [rotatingYardElement, setRotatingYardElement] = useState(null); // { id, startAngle, startRotation }
 
+  // House feature placement
+  const [houseFeatureMenu, setHouseFeatureMenu] = useState(null); // { edgeIndex, t, screenX, screenY }
+  const [selectedHouseFeature, setSelectedHouseFeature] = useState(null); // feature id
+  const [editingHouse, setEditingHouse] = useState(false); // toggle house polygon vertex editing
+  const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
+
   const svgW = state.yardWidthFt * SCALE;
   const svgH = state.yardHeightFt * SCALE;
 
@@ -158,7 +164,47 @@ export default function YardView() {
   // --- Mouse Handlers ---
 
   const handleMouseDown = useCallback((e) => {
-    if (draggingVertex || movingPlot) return;
+    if (draggingVertex || draggingHouseVertex || movingPlot || draggingYardElement || resizingYardElement || rotatingYardElement) return;
+
+    // House polygon vertex editing
+    if (editingHouse && state.housePolygon && zoom !== null && panOffset) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const toScreen = (pt) => ({
+        x: pt.x * SCALE * zoom + panOffset.x,
+        y: pt.y * SCALE * zoom + panOffset.y,
+      });
+
+      // Check vertices
+      for (let i = 0; i < state.housePolygon.length; i++) {
+        const sp = toScreen(state.housePolygon[i]);
+        const dist = Math.sqrt((mx - sp.x) ** 2 + (my - sp.y) ** 2);
+        if (dist < VERTEX_GRAB_R) {
+          e.preventDefault();
+          e.stopPropagation();
+          setDraggingHouseVertex(i);
+          return;
+        }
+      }
+
+      // Check edges to add a vertex
+      for (let i = 0; i < state.housePolygon.length; i++) {
+        const j = (i + 1) % state.housePolygon.length;
+        const sa = toScreen(state.housePolygon[i]);
+        const sb = toScreen(state.housePolygon[j]);
+        const { t, dist } = closestOnSegment(mx, my, sa.x, sa.y, sb.x, sb.y);
+        if (dist < EDGE_GRAB_D && t > 0.15 && t < 0.85) {
+          e.preventDefault();
+          e.stopPropagation();
+          const svg = toSVG(e.clientX, e.clientY);
+          const newPt = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+          dispatch({ type: 'ADD_HOUSE_VERTEX', payload: { index: j, point: newPt } });
+          setDraggingHouseVertex(j);
+          return;
+        }
+      }
+    }
     // Check if clicking on a vertex or edge of the editing plot
     // Use screen-space distances so grab radius feels consistent at any zoom
     if (state.editingPlotId && zoom !== null && panOffset) {
@@ -214,7 +260,7 @@ export default function YardView() {
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     }
-  }, [draggingVertex, movingPlot, state.editingPlotId, state.plots, zoom, panOffset, toSVG, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingYardElement, resizingYardElement, rotatingYardElement, movingPlot, editingHouse, state.housePolygon, state.editingPlotId, state.plots, zoom, panOffset, toSVG, dispatch]);
 
   const handleMouseMove = useCallback((e) => {
     // Element placement preview
@@ -223,6 +269,14 @@ export default function YardView() {
       const svgX = (e.clientX - rect.left - panOffset.x) / zoom;
       const svgY = (e.clientY - rect.top - panOffset.y) / zoom;
       setElementPreviewPos({ x: Math.round(svgX / SCALE) * SCALE, y: Math.round(svgY / SCALE) * SCALE });
+    }
+    // House polygon vertex dragging
+    if (draggingHouseVertex !== null && state.housePolygon) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const newPoly = [...state.housePolygon];
+      newPoly[draggingHouseVertex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+      dispatch({ type: 'UPDATE_HOUSE_POLYGON', payload: newPoly });
+      return;
     }
     // Yard element dragging
     if (draggingYardElement) {
@@ -291,9 +345,11 @@ export default function YardView() {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
+    setIsPanning(false);
+    if (draggingHouseVertex !== null) { setDraggingHouseVertex(null); return; }
     if (draggingYardElement) { setDraggingYardElement(null); return; }
     if (resizingYardElement) { setResizingYardElement(null); return; }
     if (rotatingYardElement) { setRotatingYardElement(null); return; }
@@ -318,8 +374,7 @@ export default function YardView() {
       setMoveOffset(null);
       return;
     }
-    setIsPanning(false);
-  }, [draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
+  }, [draggingHouseVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -454,6 +509,173 @@ export default function YardView() {
     }
   }, [state.editingPlotId, state.plots, dispatch]);
 
+  // --- Touch Handlers (iPad / mobile) ---
+  const touchRef = useRef({ startDist: 0, startZoom: 1, mode: null });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const getTouchDist = (t1, t2) => Math.sqrt((t1.clientX - t2.clientX) ** 2 + (t1.clientY - t2.clientY) ** 2);
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        // Pinch-to-zoom
+        e.preventDefault();
+        touchRef.current.mode = 'pinch';
+        touchRef.current.startDist = getTouchDist(e.touches[0], e.touches[1]);
+        touchRef.current.startZoom = zoom || 1;
+        return;
+      }
+      if (e.touches.length !== 1) return;
+
+      const touch = e.touches[0];
+      const rect = el.getBoundingClientRect();
+      const mx = touch.clientX - rect.left;
+      const my = touch.clientY - rect.top;
+
+      // Check if touching a plot vertex (editing mode)
+      if (state.editingPlotId && zoom !== null && panOffset) {
+        const plot = state.plots.find(p => p.id === state.editingPlotId);
+        if (plot) {
+          const shape = getPlotShape(plot);
+          const touchR = VERTEX_GRAB_R * 1.5; // bigger for touch
+
+          for (let i = 0; i < shape.length; i++) {
+            const sx = shape[i].x * SCALE * zoom + panOffset.x;
+            const sy = shape[i].y * SCALE * zoom + panOffset.y;
+            if (Math.sqrt((mx - sx) ** 2 + (my - sy) ** 2) < touchR) {
+              e.preventDefault();
+              touchRef.current.mode = 'vertex';
+              setDraggingVertex({ plotId: plot.id, vertexIndex: i });
+              return;
+            }
+          }
+        }
+      }
+
+      // Check if touching a plot body (to move it)
+      if (zoom !== null && panOffset) {
+        for (const plot of state.plots) {
+          const shape = getPlotShape(plot);
+          const ctr = centroid(shape);
+          const sx = ctr.x * SCALE * zoom + panOffset.x;
+          const sy = ctr.y * SCALE * zoom + panOffset.y;
+          // Rough hit test: check if within bounding box of plot
+          const xs = shape.map(pt => pt.x * SCALE * zoom + panOffset.x);
+          const ys = shape.map(pt => pt.y * SCALE * zoom + panOffset.y);
+          const minX = Math.min(...xs), maxX = Math.max(...xs);
+          const minY = Math.min(...ys), maxY = Math.max(...ys);
+          if (mx >= minX - 10 && mx <= maxX + 10 && my >= minY - 10 && my <= maxY + 10) {
+            e.preventDefault();
+            touchRef.current.mode = 'plot-pending';
+            dispatch({ type: 'SET_EDITING_PLOT', payload: plot.id });
+            setPlotPending({
+              id: plot.id,
+              startX: touch.clientX,
+              startY: touch.clientY,
+              startShape: getPlotShape(plot),
+            });
+            return;
+          }
+        }
+      }
+
+      // Default: pan
+      touchRef.current.mode = 'pan';
+      setPanStart({ x: touch.clientX - (panOffset?.x || 0), y: touch.clientY - (panOffset?.y || 0) });
+      setIsPanning(true);
+    };
+
+    const onTouchMove = (e) => {
+      if (touchRef.current.mode === 'pinch' && e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getTouchDist(e.touches[0], e.touches[1]);
+        const scale = dist / touchRef.current.startDist;
+        const newZoom = Math.min(4, Math.max(0.1, touchRef.current.startZoom * scale));
+        setZoom(newZoom);
+        return;
+      }
+
+      if (e.touches.length !== 1) return;
+      const touch = e.touches[0];
+
+      if (touchRef.current.mode === 'vertex' && draggingVertex) {
+        e.preventDefault();
+        const svg = toSVG(touch.clientX, touch.clientY);
+        const plot = state.plots.find(p => p.id === draggingVertex.plotId);
+        if (plot) {
+          const shape = [...getPlotShape(plot)];
+          shape[draggingVertex.vertexIndex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+          dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape } });
+        }
+        return;
+      }
+
+      if (touchRef.current.mode === 'plot-pending' && plotPending) {
+        const dx = touch.clientX - plotPending.startX;
+        const dy = touch.clientY - plotPending.startY;
+        if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+          touchRef.current.mode = 'plot-move';
+          setMovingPlot({
+            id: plotPending.id,
+            startMouseX: plotPending.startX,
+            startMouseY: plotPending.startY,
+            startShape: plotPending.startShape,
+          });
+          setPlotPending(null);
+        }
+        return;
+      }
+
+      if (touchRef.current.mode === 'plot-move' && movingPlot) {
+        e.preventDefault();
+        const dx = (touch.clientX - movingPlot.startMouseX) / zoom / SCALE;
+        const dy = (touch.clientY - movingPlot.startMouseY) / zoom / SCALE;
+        setMoveOffset({ dx: Math.round(dx), dy: Math.round(dy) });
+        return;
+      }
+
+      if (touchRef.current.mode === 'pan') {
+        e.preventDefault();
+        setPanOffset({ x: touch.clientX - panStart.x, y: touch.clientY - panStart.y });
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (touchRef.current.mode === 'vertex') {
+        setDraggingVertex(null);
+      }
+      if (touchRef.current.mode === 'plot-pending') {
+        setPlotPending(null);
+      }
+      if ((touchRef.current.mode === 'plot-move') && movingPlot && moveOffset) {
+        const plot = state.plots.find(p => p.id === movingPlot.id);
+        if (plot) {
+          const newShape = movingPlot.startShape.map(pt => ({
+            x: pt.x + moveOffset.dx,
+            y: pt.y + moveOffset.dy,
+          }));
+          dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: movingPlot.id, shape: newShape } });
+        }
+        setMovingPlot(null);
+        setMoveOffset(null);
+      }
+      setIsPanning(false);
+      touchRef.current.mode = null;
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [zoom, panOffset, panStart, state.editingPlotId, state.plots, draggingVertex, plotPending, movingPlot, moveOffset, toSVG, dispatch]);
+
   // Window-level mouseUp to catch drag releases even when mouse is outside element
   useEffect(() => {
     const handleGlobalMouseUp = () => {
@@ -568,6 +790,20 @@ export default function YardView() {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Edit House */}
+          {state.housePolygon && (
+            <button
+              onClick={() => { setEditingHouse(!editingHouse); setHouseFeatureMenu(null); setSelectedHouseFeature(null); }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
+                editingHouse
+                  ? 'bg-terra text-cream'
+                  : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
+              }`}
+            >
+              <Home className="w-3.5 h-3.5" /> {editingHouse ? 'Done Editing' : 'Edit House'}
+            </button>
+          )}
 
           {/* Add Elements */}
           <div className="relative">
@@ -692,6 +928,8 @@ export default function YardView() {
           if (!draggingVertex && !movingPlot && !draggingYardElement) {
             dispatch({ type: 'SET_EDITING_PLOT', payload: null });
             setSelectedYardElement(null);
+            setSelectedHouseFeature(null);
+            setHouseFeatureMenu(null);
             setShowAddMenu(false);
             setShowElementMenu(false);
           }
@@ -777,6 +1015,140 @@ export default function YardView() {
                     </text>
                   );
                 })()}
+
+                {/* Clickable wall edges for adding doors/windows (not while editing shape) */}
+                {!editingHouse && state.housePolygon.map((p, i) => {
+                  const j = (i + 1) % state.housePolygon.length;
+                  const q = state.housePolygon[j];
+                  return (
+                    <line
+                      key={`wall-${i}`}
+                      x1={p.x * SCALE} y1={p.y * SCALE}
+                      x2={q.x * SCALE} y2={q.y * SCALE}
+                      stroke="transparent" strokeWidth={12 / zoom}
+                      style={{ cursor: 'crosshair', pointerEvents: 'stroke' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const svg = toSVG(e.clientX, e.clientY);
+                        const { t } = closestOnSegment(svg.x, svg.y, p.x * SCALE, p.y * SCALE, q.x * SCALE, q.y * SCALE);
+                        const rect = containerRef.current.getBoundingClientRect();
+                        setHouseFeatureMenu({ edgeIndex: i, t, screenX: e.clientX - rect.left, screenY: e.clientY - rect.top });
+                        setSelectedHouseFeature(null);
+                      }}
+                    />
+                  );
+                })}
+
+                {/* House polygon vertex handles (edit mode) */}
+                {editingHouse && state.housePolygon.map((p, i) => (
+                  <g key={`hv-${i}`}>
+                    <circle
+                      cx={p.x * SCALE} cy={p.y * SCALE}
+                      r={12 / zoom}
+                      fill="transparent"
+                      style={{ cursor: draggingHouseVertex === i ? 'grabbing' : 'grab', pointerEvents: 'all' }}
+                    />
+                    <circle
+                      cx={p.x * SCALE} cy={p.y * SCALE}
+                      r={5 / zoom}
+                      fill="#A08870" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  </g>
+                ))}
+                {/* Editing outline highlight */}
+                {editingHouse && (
+                  <polygon
+                    points={state.housePolygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ')}
+                    fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray={`${6 / zoom} ${3 / zoom}`}
+                    style={{ pointerEvents: 'none' }}
+                  />
+                )}
+
+                {/* Render house features (doors, windows, etc.) */}
+                {(state.houseFeatures || []).map(feat => {
+                  const poly = state.housePolygon;
+                  const a = poly[feat.edgeIndex];
+                  const b = poly[(feat.edgeIndex + 1) % poly.length];
+                  // Position along the edge
+                  const edgeX = (a.x + (b.x - a.x) * feat.t) * SCALE;
+                  const edgeY = (a.y + (b.y - a.y) * feat.t) * SCALE;
+                  // Edge angle and inward normal (toward house centroid)
+                  const angle = Math.atan2((b.y - a.y), (b.x - a.x)) * 180 / Math.PI;
+                  const edgeDx = b.x - a.x, edgeDy = b.y - a.y;
+                  const edgeLen = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) || 1;
+                  // Normal perpendicular to edge (two candidates: +90 and -90)
+                  const nx = -edgeDy / edgeLen, ny = edgeDx / edgeLen;
+                  // Pick the normal that points toward the house centroid
+                  const c = centroid(poly);
+                  const toCx = c.x - (a.x + (b.x - a.x) * feat.t);
+                  const toCy = c.y - (a.y + (b.y - a.y) * feat.t);
+                  const dot = nx * toCx + ny * toCy;
+                  const inX = (dot >= 0 ? nx : -nx);
+                  const inY = (dot >= 0 ? ny : -ny);
+
+                  const wPx = feat.widthFt * SCALE;
+                  const depthPx = (feat.type === 'garage-door' ? 1.5 : feat.type === 'door' ? 3 : 1.5) * SCALE;
+                  // Offset center inward so feature sits inside the house wall
+                  const cx = edgeX + inX * depthPx / 2;
+                  const cy = edgeY + inY * depthPx / 2;
+                  const isSelFeat = selectedHouseFeature === feat.id;
+
+                  return (
+                    <g key={feat.id} transform={`rotate(${angle} ${cx} ${cy})`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedHouseFeature(feat.id); setHouseFeatureMenu(null); setSelectedYardElement(null); }}
+                    >
+                      {feat.type === 'door' ? (
+                        <>
+                          <rect x={cx - wPx / 2} y={cy - depthPx / 2} width={wPx} height={depthPx}
+                            fill="#6B4B2A" stroke="#4A3A1A" strokeWidth={1.5 / zoom} rx={1} />
+                          {/* Knob */}
+                          <circle cx={cx + wPx * 0.3} cy={cy} r={1.5 / zoom} fill="#C4A060" />
+                        </>
+                      ) : feat.type === 'garage-door' ? (
+                        <>
+                          <rect x={cx - wPx / 2} y={cy - depthPx / 2} width={wPx} height={depthPx}
+                            fill="#8A7A6A" stroke="#5A4A3A" strokeWidth={1.5 / zoom} rx={1} />
+                          {/* Panel lines */}
+                          {[0.25, 0.5, 0.75].map((t, ti) => (
+                            <line key={ti} x1={cx - wPx / 2 + wPx * t} y1={cy - depthPx / 2 + 1}
+                              x2={cx - wPx / 2 + wPx * t} y2={cy + depthPx / 2 - 1}
+                              stroke="#5A4A3A" strokeWidth={0.5 / zoom} opacity={0.5} />
+                          ))}
+                        </>
+                      ) : (
+                        // Window
+                        <>
+                          <rect x={cx - wPx / 2} y={cy - depthPx / 2} width={wPx} height={depthPx}
+                            fill="#B8D4E8" stroke="#5A6A7A" strokeWidth={1.5 / zoom} rx={0.5} opacity={0.85} />
+                          {/* Cross bar */}
+                          <line x1={cx} y1={cy - depthPx / 2} x2={cx} y2={cy + depthPx / 2}
+                            stroke="#5A6A7A" strokeWidth={0.8 / zoom} opacity={0.6} />
+                          <line x1={cx - wPx / 2} y1={cy} x2={cx + wPx / 2} y2={cy}
+                            stroke="#5A6A7A" strokeWidth={0.8 / zoom} opacity={0.6} />
+                        </>
+                      )}
+
+                      {/* Selection highlight + delete */}
+                      {isSelFeat && (
+                        <>
+                          <rect x={cx - wPx / 2 - 3 / zoom} y={cy - depthPx / 2 - 3 / zoom}
+                            width={wPx + 6 / zoom} height={depthPx + 6 / zoom}
+                            fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="4 2" rx={2} />
+                          <g style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_HOUSE_FEATURE', payload: feat.id }); setSelectedHouseFeature(null); }}
+                          >
+                            <circle cx={cx + wPx / 2 + 6 / zoom} cy={cy - depthPx / 2 - 6 / zoom} r={6 / zoom}
+                              fill="#C4544A" stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                            <text x={cx + wPx / 2 + 6 / zoom} y={cy - depthPx / 2 - 3.5 / zoom}
+                              textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">x</text>
+                          </g>
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
               </g>
             )}
 
@@ -798,6 +1170,22 @@ export default function YardView() {
                     e.preventDefault();
                     setSelectedYardElement(el.id);
                     const svg = toSVG(e.clientX, e.clientY);
+                    if (isSelected) {
+                      // Check if click is on the resize handle (bottom-right)
+                      const rhx = ex + ew, rhy = ey + eh;
+                      const resizeDist = Math.sqrt((svg.x - rhx) ** 2 + (svg.y - rhy) ** 2);
+                      if (resizeDist < 12 / zoom) {
+                        setResizingYardElement({ id: el.id });
+                        return;
+                      }
+                      // Check if click is on the rotate handle (top-center)
+                      const rotDist = Math.sqrt((svg.x - ecx) ** 2 + (svg.y - (ey - 16 / zoom)) ** 2);
+                      if (rotDist < 12 / zoom) {
+                        const startAngle = Math.atan2(svg.y - ecy, svg.x - ecx) * 180 / Math.PI;
+                        setRotatingYardElement({ id: el.id, startAngle, startRotation: rot });
+                        return;
+                      }
+                    }
                     setDraggingYardElement({ id: el.id, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                   }}
                 >
@@ -1094,6 +1482,47 @@ export default function YardView() {
           </g>
           </>}
         </svg>
+
+        {/* House feature popover — add door/window to a wall */}
+        {houseFeatureMenu && (
+          <div
+            className="absolute z-40"
+            style={{ left: houseFeatureMenu.screenX - 60, top: houseFeatureMenu.screenY + 8 }}
+          >
+            <div className="bg-white dark:bg-midnight-green rounded-xl shadow-lg border border-sage/20 dark:border-sage-dark/20 overflow-hidden" style={{ minWidth: 130 }}>
+              <div className="px-3 py-1.5 text-[10px] font-medium text-forest/50 dark:text-cream/50 uppercase tracking-wider border-b border-sage/10">
+                Add to wall
+              </div>
+              {[
+                { type: 'door', label: 'Door', widthFt: 3, icon: '🚪' },
+                { type: 'window', label: 'Window', widthFt: 3, icon: '🪟' },
+                { type: 'garage-door', label: 'Garage Door', widthFt: 9, icon: '🏠' },
+              ].map(opt => (
+                <button
+                  key={opt.type}
+                  className="w-full px-3 py-2 text-left text-xs font-medium text-forest dark:text-cream hover:bg-sage/10 dark:hover:bg-sage-dark/10 flex items-center"
+                  style={{ gap: 8 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dispatch({
+                      type: 'ADD_HOUSE_FEATURE',
+                      payload: { type: opt.type, edgeIndex: houseFeatureMenu.edgeIndex, t: houseFeatureMenu.t, widthFt: opt.widthFt },
+                    });
+                    setHouseFeatureMenu(null);
+                  }}
+                >
+                  <span>{opt.icon}</span> {opt.label}
+                </button>
+              ))}
+              <button
+                className="w-full px-3 py-1.5 text-left text-[10px] text-forest/40 dark:text-cream/40 hover:bg-sage/10 border-t border-sage/10"
+                onClick={(e) => { e.stopPropagation(); setHouseFeatureMenu(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Compass rose — fixed in bottom-right corner */}
         <div className="absolute bottom-4 right-4 pointer-events-none">
