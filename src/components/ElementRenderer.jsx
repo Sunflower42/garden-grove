@@ -251,6 +251,27 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             <circle key={i} cx={px + w * tx} cy={py + h * ty} r={w * 0.12} fill={element.borderColor} opacity={0.55} />
           ))}
         </g>
+      ) : element.id === 'pool' ? (
+        // Swimming pool — water with lane lines and coping
+        <g>
+          {/* Pool coping (border) */}
+          <rect x={px - 2} y={py - 2} width={w + 4} height={h + 4} fill="#C4B8A8" rx={6} opacity={0.9} />
+          {/* Water */}
+          <rect x={px} y={py} width={w} height={h} fill="#5BA4CF" rx={5} opacity={0.85} />
+          {/* Lighter water center */}
+          <rect x={px + w * 0.1} y={py + h * 0.1} width={w * 0.8} height={h * 0.8} fill="#7EC4E8" rx={4} opacity={0.4} />
+          {/* Lane lines */}
+          {Array.from({ length: Math.max(1, Math.floor(w / 20)) }).map((_, i) => {
+            const lx = px + (i + 1) * (w / (Math.floor(w / 20) + 1));
+            return <line key={i} x1={lx} y1={py + 6} x2={lx} y2={py + h - 6} stroke="#4A94BF" strokeWidth={0.5} opacity={0.4} strokeDasharray="4 3" />;
+          })}
+          {/* Water ripple highlights */}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <ellipse key={`r${i}`} cx={px + w * (0.3 + i * 0.2)} cy={py + h * (0.3 + i * 0.15)} rx={w * 0.08} ry={h * 0.03} fill="#A8DCF0" opacity={0.3} />
+          ))}
+          {/* Steps indicator (shallow end) */}
+          <rect x={px + 2} y={py + 2} width={w - 4} height={h * 0.08} fill="#7EC4E8" rx={2} opacity={0.5} />
+        </g>
       ) : element.id === 'wall-straight' ? (
         // Straight wall — stone/brick texture
         <g>

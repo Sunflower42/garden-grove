@@ -298,6 +298,20 @@ export const ELEMENTS = [
     description: 'Feed your garden! Black gold production station.',
   },
 
+  // Pool
+  {
+    id: 'pool',
+    name: 'Swimming Pool',
+    category: 'hardscape',
+    widthIn: 144,
+    heightIn: 240,
+    color: '#5BA4CF',
+    borderColor: '#3A7AAA',
+    description: 'In-ground pool — resize and reshape to fit',
+    resizable: true,
+    polygonEditable: true,
+  },
+
   // Walls
   {
     id: 'wall-straight',
