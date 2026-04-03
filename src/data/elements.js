@@ -308,6 +308,16 @@ export const ELEMENTS = [
     circular: true,
   },
   {
+    id: 'garden-chess',
+    name: 'Giant Chess Set',
+    category: 'decor',
+    widthIn: 96,
+    heightIn: 96,
+    color: '#D4C8B0',
+    borderColor: '#8A7A6A',
+    description: 'Life-size outdoor chess board with pieces — 8×8ft',
+  },
+  {
     id: 'compost-bin',
     name: 'Compost Bin',
     category: 'decor',

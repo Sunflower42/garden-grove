@@ -284,6 +284,39 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             <rect key={i} x={px + w * tx - w * 0.09} y={py + h * ty - h * 0.09} width={w * 0.18} height={h * 0.18} fill={element.borderColor} rx={2} opacity={0.6} />
           ))}
         </g>
+      ) : element.id === 'garden-chess' ? (
+        // Giant chess set — checkered board with a few piece silhouettes
+        <g>
+          {/* Board base */}
+          <rect x={px} y={py} width={w} height={h} fill="#D4C8B0" stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Checkerboard squares */}
+          {Array.from({ length: 8 }).map((_, row) =>
+            Array.from({ length: 8 }).map((_, col) => {
+              if ((row + col) % 2 === 0) return null;
+              return (
+                <rect key={`${row}-${col}`}
+                  x={px + col * w / 8} y={py + row * h / 8}
+                  width={w / 8} height={h / 8}
+                  fill="#5A4A3A" opacity={0.6}
+                />
+              );
+            })
+          )}
+          {/* A few chess piece silhouettes — king, queen, rook, pawn */}
+          {/* White king */}
+          <text x={px + w * 0.5625} y={py + h * 0.94} textAnchor="middle" fontSize={w / 9} fill="#F5F0E8" opacity={0.9}>♔</text>
+          {/* Black queen */}
+          <text x={px + w * 0.4375} y={py + h * 0.19} textAnchor="middle" fontSize={w / 9} fill="#2A2A2A" opacity={0.8}>♛</text>
+          {/* White rook */}
+          <text x={px + w * 0.0625} y={py + h * 0.94} textAnchor="middle" fontSize={w / 10} fill="#F5F0E8" opacity={0.85}>♖</text>
+          {/* Black knight */}
+          <text x={px + w * 0.8125} y={py + h * 0.19} textAnchor="middle" fontSize={w / 10} fill="#2A2A2A" opacity={0.75}>♞</text>
+          {/* Pawns */}
+          {[0, 1, 2, 3, 4, 5, 6, 7].map(i => (
+            <text key={`wp${i}`} x={px + w * (i + 0.5) / 8} y={py + h * 0.81}
+              textAnchor="middle" fontSize={w / 12} fill="#F5F0E8" opacity={0.7}>♙</text>
+          ))}
+        </g>
       ) : element.id === 'bistro-set' ? (
         // Bistro — small round table + 2 chairs
         <g>
