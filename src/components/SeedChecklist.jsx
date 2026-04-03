@@ -103,7 +103,7 @@ export default function SeedChecklist({ onClose }) {
   function handlePrint() {
     const printWindow = window.open('', '_blank', 'width=800,height=900');
     const html = `<!DOCTYPE html>
-<html><head><title>Seed Starting Checklist</title>
+<html><head><title>Seed Planting Checklist</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Segoe UI', system-ui, sans-serif; color: #1a1a1a; padding: 40px; }
@@ -122,7 +122,7 @@ export default function SeedChecklist({ onClose }) {
   .footer { text-align: center; font-size: 11px; color: #aaa; margin-top: 24px; }
   .empty { text-align: center; padding: 60px 0; color: #999; font-size: 18px; }
 </style></head><body>
-<h1>Seed Starting Checklist</h1>
+<h1>Seed Planting Checklist</h1>
 <p class="subtitle">Seeds to start by ${formatDate(today)} · Zone ${state.zone}${lastFrostDate ? ` · Last frost: ${formatDate(lastFrostDate)}` : ''}</p>
 ${checklistItems.length === 0 ? '<p class="empty">No seeds due yet!</p>' : checklistItems.map(item => `
 <div class="item">
@@ -163,7 +163,7 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
         <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 " style={{ padding: '24px 32px' }}>
           <div>
             <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream">
-              Seed Starting Checklist
+              Seed Planting Checklist
             </h2>
             <p className="text-sm text-sage-dark/70 dark:text-sage/60" style={{ marginTop: 4 }}>
               Seeds to start by {formatDate(today)} &middot; Zone {state.zone}

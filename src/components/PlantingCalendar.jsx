@@ -170,7 +170,7 @@ export default function PlantingCalendar() {
               style={{ padding: '8px 14px', gap: 6 }}
             >
               <ClipboardList className="w-3.5 h-3.5" />
-              Seed Checklist
+              Seed Planting Checklist
             </button>
           )}
         </div>

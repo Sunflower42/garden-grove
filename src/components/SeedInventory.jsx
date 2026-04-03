@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store';
 import { PLANTS, PLANT_CATEGORIES, getPlantById, searchPlants } from '../data/plants';
-import { Search, Plus, Minus, X, ChevronDown, Shield, Droplets, Sun, Clock, Users, Ban, Sprout, Flower2, Pencil, Check, Info, LayoutGrid, List, ShoppingCart } from 'lucide-react';
+import { Search, Plus, Minus, X, ChevronDown, Shield, Droplets, Sun, Clock, Users, Ban, Sprout, Flower2, Pencil, Check, Info, LayoutGrid, List, ShoppingCart, ClipboardList } from 'lucide-react';
 import { lookupVariety, getVarietiesForPlant } from '../data/varieties';
+import SeedChecklist from './SeedChecklist';
 
 function DeerMeter({ level }) {
   return (
@@ -452,6 +453,7 @@ export default function SeedInventory() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [showInventoryOnly, setShowInventoryOnly] = useState(state.seedInventory.length > 0);
   const [showZoneOnly, setShowZoneOnly] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
   const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'compact'
 
   // Helper to check if a plant is in inventory
@@ -622,6 +624,16 @@ export default function SeedInventory() {
           <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream shrink-0">
             Seed Inventory
           </h2>
+          {state.seedInventory.length > 0 && (
+            <button
+              onClick={() => setShowChecklist(true)}
+              className="flex items-center rounded-xl bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light hover:bg-terra/20 dark:hover:bg-terra/25 transition-colors text-xs font-medium shrink-0"
+              style={{ padding: '8px 14px', gap: 6 }}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              Seed Planting Checklist
+            </button>
+          )}
           <div className="relative flex-1" style={{ maxWidth: 480 }}>
             <Search className="absolute top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-sage/40" style={{ left: 16 }} />
             {quickPlant ? (
@@ -1001,6 +1013,11 @@ export default function SeedInventory() {
           </div>
         )}
       </div>
+
+      {/* Seed Planting Checklist */}
+      <AnimatePresence>
+        {showChecklist && <SeedChecklist onClose={() => setShowChecklist(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
