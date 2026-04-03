@@ -18,6 +18,7 @@ const PLOT_TEMPLATES = [
   { name: 'Berry Patch', icon: '🫐', w: 8, h: 6 },
   { name: 'Salsa Garden', icon: '🌶️', w: 6, h: 6 },
   { name: 'Raised Bed Row', icon: '🪵', w: 16, h: 4 },
+  { name: 'Quadrant Garden', icon: '✦', w: 0, h: 0, quadrant: true },
 ];
 
 // 1 foot = this many SVG pixels
@@ -895,10 +896,24 @@ export default function YardView() {
                     <button
                       key={tpl.name}
                       onClick={() => {
-                        dispatch({
-                          type: 'ADD_PLOT',
-                          payload: { name: tpl.name, icon: tpl.icon, widthFt: tpl.w, heightFt: tpl.h },
-                        });
+                        if (tpl.quadrant) {
+                          // Place quadrant garden near center of current view
+                          const rect = containerRef.current?.getBoundingClientRect();
+                          let sx = 15, sy = 15;
+                          if (rect && zoom && panOffset) {
+                            sx = Math.round(((rect.width / 2 - panOffset.x) / zoom) / SCALE) - 10;
+                            sy = Math.round(((rect.height / 2 - panOffset.y) / zoom) / SCALE) - 10;
+                          }
+                          dispatch({
+                            type: 'ADD_QUADRANT_GARDEN',
+                            payload: { quadW: 8, quadH: 8, gap: 4, startX: sx, startY: sy },
+                          });
+                        } else {
+                          dispatch({
+                            type: 'ADD_PLOT',
+                            payload: { name: tpl.name, icon: tpl.icon, widthFt: tpl.w, heightFt: tpl.h },
+                          });
+                        }
                         setShowAddMenu(false);
                       }}
                       className="w-full flex items-center text-xs text-forest-deep dark:text-cream hover:bg-sage/8 dark:hover:bg-sage/8 transition-colors"
@@ -907,7 +922,9 @@ export default function YardView() {
                       <span className="text-lg leading-none">{tpl.icon}</span>
                       <div className="text-left">
                         <div className="font-medium">{tpl.name}</div>
-                        <div className="text-[9px] text-sage-dark/60 dark:text-sage/50 mt-0.5">{tpl.w}' x {tpl.h}'</div>
+                        <div className="text-[9px] text-sage-dark/60 dark:text-sage/50 mt-0.5">
+                          {tpl.quadrant ? '4 beds × 8\'×8\' + center space' : `${tpl.w}' x ${tpl.h}'`}
+                        </div>
                       </div>
                     </button>
                   ))}

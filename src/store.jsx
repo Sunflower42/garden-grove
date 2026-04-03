@@ -244,6 +244,42 @@ function reducer(state, action) {
     case 'SET_EDITING_PLOT':
       return { ...state, editingPlotId: action.payload };
 
+    case 'ADD_QUADRANT_GARDEN': {
+      // 4 plots arranged around a central open space for a fountain/feature
+      const { quadW, quadH, gap, startX, startY } = action.payload;
+      const now = Date.now();
+      const labels = [
+        { name: 'NW Quadrant', icon: '🌿', dx: 0, dy: 0 },
+        { name: 'NE Quadrant', icon: '🌸', dx: quadW + gap, dy: 0 },
+        { name: 'SW Quadrant', icon: '🌻', dx: 0, dy: quadH + gap },
+        { name: 'SE Quadrant', icon: '🌺', dx: quadW + gap, dy: quadH + gap },
+      ];
+      const newPlots = labels.map((q, i) => {
+        const px = startX + q.dx;
+        const py = startY + q.dy;
+        return {
+          id: `plot-${now + i}`,
+          name: q.name,
+          icon: q.icon,
+          widthFt: quadW,
+          heightFt: quadH,
+          yardX: px,
+          yardY: py,
+          shape: [
+            { x: px, y: py },
+            { x: px + quadW, y: py },
+            { x: px + quadW, y: py + quadH },
+            { x: px, y: py + quadH },
+          ],
+          plants: [],
+          elements: [],
+        };
+      });
+      return {
+        ...state,
+        plots: [...state.plots, ...newPlots],
+      };
+    }
     case 'ADD_PLOT': {
       // Place new plots staggered on the yard
       const offset = state.plots.length * 5;
