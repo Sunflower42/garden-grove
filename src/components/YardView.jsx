@@ -97,6 +97,8 @@ export default function YardView() {
   const [selectedHouseFeature, setSelectedHouseFeature] = useState(null); // feature id
   const [editingHouse, setEditingHouse] = useState(false); // toggle house polygon vertex editing
   const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
+  const [editingElementShape, setEditingElementShape] = useState(null); // yard element id being shape-edited
+  const [draggingElementVertex, setDraggingElementVertex] = useState(null); // { id, vertexIndex }
 
   const svgW = state.yardWidthFt * SCALE;
   const svgH = state.yardHeightFt * SCALE;
@@ -164,7 +166,7 @@ export default function YardView() {
   // --- Mouse Handlers ---
 
   const handleMouseDown = useCallback((e) => {
-    if (draggingVertex || draggingHouseVertex || movingPlot || draggingYardElement || resizingYardElement || rotatingYardElement) return;
+    if (draggingVertex || draggingHouseVertex || draggingElementVertex || movingPlot || draggingYardElement || resizingYardElement || rotatingYardElement) return;
 
     // House polygon vertex editing
     if (editingHouse && state.housePolygon && zoom !== null && panOffset) {
@@ -205,6 +207,49 @@ export default function YardView() {
         }
       }
     }
+    // Element polygon vertex editing
+    if (editingElementShape && zoom !== null && panOffset) {
+      const el = state.yardElements.find(y => y.id === editingElementShape);
+      if (el?.polygon) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const toScreen = (pt) => ({
+          x: pt.x * SCALE * zoom + panOffset.x,
+          y: pt.y * SCALE * zoom + panOffset.y,
+        });
+
+        // Check vertices
+        for (let i = 0; i < el.polygon.length; i++) {
+          const sp = toScreen(el.polygon[i]);
+          const dist = Math.sqrt((mx - sp.x) ** 2 + (my - sp.y) ** 2);
+          if (dist < VERTEX_GRAB_R) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDraggingElementVertex({ id: el.id, vertexIndex: i });
+            return;
+          }
+        }
+
+        // Check edges to add a vertex
+        for (let i = 0; i < el.polygon.length; i++) {
+          const j = (i + 1) % el.polygon.length;
+          const sa = toScreen(el.polygon[i]);
+          const sb = toScreen(el.polygon[j]);
+          const { t, dist } = closestOnSegment(mx, my, sa.x, sa.y, sb.x, sb.y);
+          if (dist < EDGE_GRAB_D && t > 0.15 && t < 0.85) {
+            e.preventDefault();
+            e.stopPropagation();
+            const svg = toSVG(e.clientX, e.clientY);
+            const newPt = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+            dispatch({ type: 'ADD_YARD_ELEMENT_VERTEX', payload: { id: el.id, index: j, point: newPt } });
+            setDraggingElementVertex({ id: el.id, vertexIndex: j });
+            return;
+          }
+        }
+      }
+    }
+
     // Check if clicking on a vertex or edge of the editing plot
     // Use screen-space distances so grab radius feels consistent at any zoom
     if (state.editingPlotId && zoom !== null && panOffset) {
@@ -260,7 +305,7 @@ export default function YardView() {
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingYardElement, resizingYardElement, rotatingYardElement, movingPlot, editingHouse, state.housePolygon, state.editingPlotId, state.plots, zoom, panOffset, toSVG, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingYardElement, resizingYardElement, rotatingYardElement, movingPlot, editingHouse, editingElementShape, state.housePolygon, state.yardElements, state.editingPlotId, state.plots, zoom, panOffset, toSVG, dispatch]);
 
   const handleMouseMove = useCallback((e) => {
     // Element placement preview
@@ -276,6 +321,17 @@ export default function YardView() {
       const newPoly = [...state.housePolygon];
       newPoly[draggingHouseVertex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
       dispatch({ type: 'UPDATE_HOUSE_POLYGON', payload: newPoly });
+      return;
+    }
+    // Element polygon vertex dragging
+    if (draggingElementVertex) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const el = state.yardElements.find(y => y.id === draggingElementVertex.id);
+      if (el?.polygon) {
+        const newPoly = [...el.polygon];
+        newPoly[draggingElementVertex.vertexIndex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+        dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
+      }
       return;
     }
     // Yard element dragging
@@ -345,11 +401,12 @@ export default function YardView() {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
     setIsPanning(false);
     if (draggingHouseVertex !== null) { setDraggingHouseVertex(null); return; }
+    if (draggingElementVertex) { setDraggingElementVertex(null); return; }
     if (draggingYardElement) { setDraggingYardElement(null); return; }
     if (resizingYardElement) { setResizingYardElement(null); return; }
     if (rotatingYardElement) { setRotatingYardElement(null); return; }
@@ -374,7 +431,7 @@ export default function YardView() {
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
+  }, [draggingHouseVertex, draggingElementVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -403,14 +460,34 @@ export default function YardView() {
   // Right-click to remove a vertex
   const handleContextMenu = useCallback((e) => {
     e.preventDefault();
-    if (!state.editingPlotId || !containerRef.current || !panOffset || zoom === null) return;
+    if (!containerRef.current || !panOffset || zoom === null) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Element polygon vertex deletion
+    if (editingElementShape) {
+      const el = state.yardElements.find(y => y.id === editingElementShape);
+      if (el?.polygon && el.polygon.length > 3) {
+        for (let i = 0; i < el.polygon.length; i++) {
+          const sx = el.polygon[i].x * SCALE * zoom + panOffset.x;
+          const sy = el.polygon[i].y * SCALE * zoom + panOffset.y;
+          const dist = Math.sqrt((mx - sx) ** 2 + (my - sy) ** 2);
+          if (dist < VERTEX_GRAB_R) {
+            const newPoly = el.polygon.filter((_, idx) => idx !== i);
+            dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
+            return;
+          }
+        }
+      }
+    }
+
+    // Plot vertex deletion
+    if (!state.editingPlotId) return;
     const plot = state.plots.find(p => p.id === state.editingPlotId);
     if (!plot) return;
     const shape = getPlotShape(plot);
     if (shape.length <= 3) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
     for (let i = 0; i < shape.length; i++) {
       const sx = shape[i].x * SCALE * zoom + panOffset.x;
       const sy = shape[i].y * SCALE * zoom + panOffset.y;
@@ -421,7 +498,7 @@ export default function YardView() {
         return;
       }
     }
-  }, [state.editingPlotId, state.plots, zoom, panOffset, dispatch]);
+  }, [state.editingPlotId, state.plots, editingElementShape, state.yardElements, zoom, panOffset, dispatch]);
 
   // Track clicks for double-click detection
   const lastPlotClick = useRef({ id: null, time: 0 });
@@ -696,6 +773,8 @@ export default function YardView() {
         setPlacingElement(null);
         setElementPreviewPos(null);
         setSelectedYardElement(null);
+        setEditingElementShape(null);
+        setDraggingElementVertex(null);
         setDraggingVertex(null);
         setMovingPlot(null);
       }
@@ -804,6 +883,46 @@ export default function YardView() {
               <Home className="w-3.5 h-3.5" /> {editingHouse ? 'Done Editing' : 'Edit House'}
             </button>
           )}
+
+          {/* Edit Shape — for polygon-editable yard elements */}
+          {(() => {
+            if (!selectedYardElement) return null;
+            const el = state.yardElements.find(y => y.id === selectedYardElement);
+            if (!el) return null;
+            const elemData = getElementById(el.elementId);
+            if (!elemData?.polygonEditable) return null;
+            const isEditing = editingElementShape === el.id;
+            return (
+              <button
+                onClick={() => {
+                  if (isEditing) {
+                    setEditingElementShape(null);
+                    setDraggingElementVertex(null);
+                  } else {
+                    // Initialize polygon from bounding box if not yet set
+                    if (!el.polygon) {
+                      const poly = [
+                        { x: el.x, y: el.y },
+                        { x: el.x + el.width, y: el.y },
+                        { x: el.x + el.width, y: el.y + el.height },
+                        { x: el.x, y: el.y + el.height },
+                      ];
+                      dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: poly } });
+                    }
+                    setEditingElementShape(el.id);
+                    setEditingHouse(false);
+                  }
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
+                  isEditing
+                    ? 'bg-terra text-cream'
+                    : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
+                }`}
+              >
+                <GripVertical className="w-3.5 h-3.5" /> {isEditing ? 'Done Shaping' : 'Edit Shape'}
+              </button>
+            );
+          })()}
 
           {/* Add Elements */}
           <div className="relative">
@@ -925,9 +1044,10 @@ export default function YardView() {
         onMouseLeave={() => { setIsPanning(false); }}
         onContextMenu={handleContextMenu}
         onClick={(e) => {
-          if (!draggingVertex && !movingPlot && !draggingYardElement) {
+          if (!draggingVertex && !draggingElementVertex && !movingPlot && !draggingYardElement) {
             dispatch({ type: 'SET_EDITING_PLOT', payload: null });
             setSelectedYardElement(null);
+            setEditingElementShape(null);
             setSelectedHouseFeature(null);
             setHouseFeatureMenu(null);
             setShowAddMenu(false);
@@ -1157,10 +1277,193 @@ export default function YardView() {
               const elemData = getElementById(el.elementId);
               if (!elemData) return null;
               const isSelected = selectedYardElement === el.id;
+              const isEditingShape = editingElementShape === el.id && el.polygon;
               const ex = el.x * SCALE, ey = el.y * SCALE;
               const ew = el.width * SCALE, eh = el.height * SCALE;
               const ecx = ex + ew / 2, ecy = ey + eh / 2;
               const rot = el.rotation || 0;
+              const hasPolygon = el.polygon && el.polygon.length >= 3;
+
+              // Polygon rendering
+              if (hasPolygon) {
+                const polyPoints = el.polygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ');
+                const polyCentroid = {
+                  x: el.polygon.reduce((s, p) => s + p.x, 0) / el.polygon.length,
+                  y: el.polygon.reduce((s, p) => s + p.y, 0) / el.polygon.length,
+                };
+                const pcx = polyCentroid.x * SCALE, pcy = polyCentroid.y * SCALE;
+                const clipId = `clip-yel-${el.id}`;
+                // Bounding box for texture lines
+                const pxs = el.polygon.map(p => p.x * SCALE);
+                const pys = el.polygon.map(p => p.y * SCALE);
+                const pMinX = Math.min(...pxs), pMaxX = Math.max(...pxs);
+                const pMinY = Math.min(...pys), pMaxY = Math.max(...pys);
+                // Area via shoelace
+                const polyAreaVal = Math.round(polyArea(el.polygon));
+
+                return (
+                  <g key={el.id}
+                    style={{ cursor: draggingYardElement?.id === el.id ? 'grabbing' : (isEditingShape ? 'default' : 'pointer') }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedYardElement(el.id); dispatch({ type: 'SET_EDITING_PLOT', payload: null }); }}
+                    onMouseDown={(e) => {
+                      if (isEditingShape) return; // vertex editing handled by container mouseDown
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setSelectedYardElement(el.id);
+                      const svg = toSVG(e.clientX, e.clientY);
+                      setDraggingYardElement({ id: el.id, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
+                    }}
+                  >
+                    {/* Clip path for polygon shape */}
+                    <defs>
+                      <clipPath id={clipId}>
+                        <polygon points={polyPoints} />
+                      </clipPath>
+                    </defs>
+
+                    {/* Invisible hit area */}
+                    <polygon points={polyPoints} fill="transparent" />
+
+                    {/* Concrete fill */}
+                    <polygon
+                      points={polyPoints}
+                      fill={elemData.color}
+                      stroke={elemData.borderColor}
+                      strokeWidth={1.5}
+                      strokeLinejoin="round"
+                      opacity={0.85}
+                    />
+
+                    {/* Broom finish texture — clipped to polygon */}
+                    <g clipPath={`url(#${clipId})`}>
+                      {Array.from({ length: Math.max(1, Math.floor((pMaxX - pMinX) / 6)) }).map((_, i) => (
+                        <line key={i} x1={pMinX + 3 + i * 6} y1={pMinY} x2={pMinX + 3 + i * 6} y2={pMaxY}
+                          stroke={elemData.borderColor} strokeWidth={0.3} opacity={0.3} />
+                      ))}
+                    </g>
+
+                    {/* Label */}
+                    <text x={pcx} y={pcy + 4} textAnchor="middle"
+                      fontSize={8} fontFamily="Outfit, sans-serif" fontWeight={500}
+                      fill="#5C4033" opacity={0.7}>
+                      {elemData.name}
+                    </text>
+
+                    {/* Selection outline */}
+                    {isSelected && !isEditingShape && (
+                      <>
+                        <polygon points={polyPoints}
+                          fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="6 3"
+                          style={{ pointerEvents: 'none' }} />
+                        {/* Area label */}
+                        <text x={pcx} y={pMaxY + 14 / zoom}
+                          textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={0.8}
+                          style={{ pointerEvents: 'none' }}>
+                          ~{polyAreaVal} sq ft
+                        </text>
+                        {/* Delete button */}
+                        <g style={{ cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: el.id }); setSelectedYardElement(null); setEditingElementShape(null); }}>
+                          <circle cx={pMaxX + 4 / zoom} cy={pMinY - 4 / zoom} r={7 / zoom}
+                            fill="#C4544A" stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                          <text x={pMaxX + 4 / zoom} y={pMinY - 1 / zoom}
+                            textAnchor="middle" fontSize={9 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">×</text>
+                        </g>
+                      </>
+                    )}
+
+                    {/* Edit shape mode — vertex handles */}
+                    {isEditingShape && (
+                      <>
+                        <polygon points={polyPoints}
+                          fill="none" stroke="#C17644" strokeWidth={2 / zoom}
+                          style={{ pointerEvents: 'none' }} />
+
+                        {/* Vertex handles */}
+                        {el.polygon.map((pt, i) => (
+                          <g key={`ev-${i}`}>
+                            <circle
+                              cx={pt.x * SCALE} cy={pt.y * SCALE}
+                              r={12 / zoom}
+                              fill="transparent"
+                              style={{ cursor: 'grab', pointerEvents: 'all' }}
+                            />
+                            <circle
+                              cx={pt.x * SCALE} cy={pt.y * SCALE}
+                              r={6 / zoom}
+                              fill="#C17644" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          </g>
+                        ))}
+
+                        {/* Edge midpoint hints + length labels */}
+                        {el.polygon.map((pt, i) => {
+                          const j = (i + 1) % el.polygon.length;
+                          const mx = (pt.x + el.polygon[j].x) / 2;
+                          const my = (pt.y + el.polygon[j].y) / 2;
+                          const dx = el.polygon[j].x - pt.x;
+                          const dy = el.polygon[j].y - pt.y;
+                          const len = Math.round(Math.sqrt(dx * dx + dy * dy));
+                          let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                          if (angle > 90 || angle < -90) angle += 180;
+                          const edgeLen = Math.sqrt(dx * dx + dy * dy);
+                          const perpX = edgeLen > 0 ? -dy / edgeLen : 0;
+                          const perpY = edgeLen > 0 ? dx / edgeLen : 0;
+                          const offsetDist = 8 / zoom;
+                          const lx = mx * SCALE + perpX * offsetDist;
+                          const ly = my * SCALE + perpY * offsetDist;
+                          return (
+                            <g key={`em-${i}`} style={{ pointerEvents: 'none' }}>
+                              <circle
+                                cx={mx * SCALE} cy={my * SCALE}
+                                r={4 / zoom}
+                                fill="#C17644" fillOpacity={0.4} stroke="#C17644" strokeWidth={0.8 / zoom}
+                              />
+                              <g transform={`translate(${lx},${ly}) rotate(${angle})`}>
+                                <rect
+                                  x={-14 / zoom} y={-6 / zoom}
+                                  width={28 / zoom} height={12 / zoom}
+                                  rx={3 / zoom}
+                                  fill="#3A2A1A" fillOpacity={0.7}
+                                />
+                                <text
+                                  x={0} y={3.5 / zoom}
+                                  textAnchor="middle"
+                                  fontSize={8 / zoom}
+                                  fontFamily="Outfit"
+                                  fontWeight={600}
+                                  fill="#FDF6E9"
+                                >
+                                  {len}'
+                                </text>
+                              </g>
+                            </g>
+                          );
+                        })}
+
+                        {/* Area label */}
+                        <text x={pcx} y={pMaxY + 14 / zoom}
+                          textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={0.8}
+                          style={{ pointerEvents: 'none' }}>
+                          ~{polyAreaVal} sq ft
+                        </text>
+
+                        {/* Delete button */}
+                        <g style={{ cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: el.id }); setSelectedYardElement(null); setEditingElementShape(null); }}>
+                          <circle cx={pMaxX + 4 / zoom} cy={pMinY - 4 / zoom} r={7 / zoom}
+                            fill="#C4544A" stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                          <text x={pMaxX + 4 / zoom} y={pMinY - 1 / zoom}
+                            textAnchor="middle" fontSize={9 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">×</text>
+                        </g>
+                      </>
+                    )}
+                  </g>
+                );
+              }
+
+              // Regular rectangular element rendering (no polygon)
               return (
                 <g key={el.id} transform={`rotate(${rot} ${ecx} ${ecy})`}
                   style={{ cursor: draggingYardElement?.id === el.id ? 'grabbing' : 'pointer' }}

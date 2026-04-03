@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store';
 import { getPlantById } from '../data/plants';
 import { parseLocalDate } from '../data/zones';
-import { Snowflake, Sprout, Sun as SunIcon, Leaf, CloudSnow } from 'lucide-react';
+import { Snowflake, Sprout, Sun as SunIcon, Leaf, CloudSnow, ClipboardList } from 'lucide-react';
+import SeedChecklist from './SeedChecklist';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -95,6 +96,7 @@ function TimelineBar({ start, end, color, label, className = '' }) {
 
 export default function PlantingCalendar() {
   const { state } = useStore();
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const lastFrostDate = state.lastFrostMMDD ? parseLocalDate(state.lastFrostMMDD, currentYear) : null;
@@ -141,24 +143,36 @@ export default function PlantingCalendar() {
           }
         </p>
 
-        {/* Legend */}
-        <div className="flex items-center" style={{ gap: 24, marginTop: 24 }}>
-          <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
-            <div className="rounded-full bg-bloom-purple/80" style={{ width: 18, height: 8 }} />
-            Start Indoors
-          </span>
-          <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
-            <div className="rounded-full bg-sage/80" style={{ width: 18, height: 8 }} />
-            Growing
-          </span>
-          <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
-            <div className="rounded-full bg-terra/80" style={{ width: 18, height: 8 }} />
-            Harvest
-          </span>
-          <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
-            <Snowflake className="w-3.5 h-3.5 text-bloom-blue/70" />
-            Frost Dates
-          </span>
+        {/* Legend & Checklist button */}
+        <div className="flex items-center justify-between" style={{ marginTop: 24 }}>
+          <div className="flex items-center" style={{ gap: 24 }}>
+            <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
+              <div className="rounded-full bg-bloom-purple/80" style={{ width: 18, height: 8 }} />
+              Start Indoors
+            </span>
+            <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
+              <div className="rounded-full bg-sage/80" style={{ width: 18, height: 8 }} />
+              Growing
+            </span>
+            <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
+              <div className="rounded-full bg-terra/80" style={{ width: 18, height: 8 }} />
+              Harvest
+            </span>
+            <span className="flex items-center text-[11px] text-sage-dark/70 dark:text-sage/60" style={{ gap: 8 }}>
+              <Snowflake className="w-3.5 h-3.5 text-bloom-blue/70" />
+              Frost Dates
+            </span>
+          </div>
+          {plantsWithDates.length > 0 && (
+            <button
+              onClick={() => setShowChecklist(true)}
+              className="flex items-center rounded-xl bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light hover:bg-terra/20 dark:hover:bg-terra/25 transition-colors text-xs font-medium"
+              style={{ padding: '8px 14px', gap: 6 }}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              Seed Checklist
+            </button>
+          )}
         </div>
       </div>
 
@@ -326,6 +340,11 @@ export default function PlantingCalendar() {
           )}
         </div>
       </div>
+
+      {/* Printable Seed Checklist */}
+      <AnimatePresence>
+        {showChecklist && <SeedChecklist onClose={() => setShowChecklist(false)} />}
+      </AnimatePresence>
     </div>
   );
 }

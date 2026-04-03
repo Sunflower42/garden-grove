@@ -73,8 +73,9 @@ export const ELEMENTS = [
     heightIn: 120,
     color: '#C4B8A8',
     borderColor: '#A89888',
-    description: 'Poured concrete slab — resize to fit',
+    description: 'Poured concrete slab — resize or reshape to fit',
     resizable: true,
+    polygonEditable: true,
   },
   {
     id: 'patio-paver',

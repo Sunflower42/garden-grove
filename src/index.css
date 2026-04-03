@@ -147,6 +147,7 @@ body {
   -webkit-backdrop-filter: blur(12px);
 }
 
+
 /* Badge / pill component */
 .badge {
   display: inline-flex;

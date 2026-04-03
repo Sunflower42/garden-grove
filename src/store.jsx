@@ -438,7 +438,16 @@ function reducer(state, action) {
       const { id, x, y } = action.payload;
       return {
         ...state,
-        yardElements: state.yardElements.map(el => el.id === id ? { ...el, x, y } : el),
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id) return el;
+          const dx = x - el.x, dy = y - el.y;
+          const updated = { ...el, x, y };
+          // Also translate polygon vertices if they exist
+          if (el.polygon) {
+            updated.polygon = el.polygon.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+          }
+          return updated;
+        }),
       };
     }
     case 'UPDATE_YARD_ELEMENT': {
@@ -452,6 +461,25 @@ function reducer(state, action) {
       return {
         ...state,
         yardElements: state.yardElements.filter(el => el.id !== action.payload),
+      };
+    }
+    case 'UPDATE_YARD_ELEMENT_POLYGON': {
+      const { id, polygon } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => el.id === id ? { ...el, polygon } : el),
+      };
+    }
+    case 'ADD_YARD_ELEMENT_VERTEX': {
+      const { id, index, point } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id || !el.polygon) return el;
+          const newPoly = [...el.polygon];
+          newPoly.splice(index, 0, point);
+          return { ...el, polygon: newPoly };
+        }),
       };
     }
     case 'ADD_HOUSE_FEATURE': {
