@@ -97,6 +97,7 @@ export default function YardView() {
   // House feature placement
   const [houseFeatureMenu, setHouseFeatureMenu] = useState(null); // { edgeIndex, t, screenX, screenY }
   const [selectedHouseFeature, setSelectedHouseFeature] = useState(null); // feature id
+  const [draggingHouseFeature, setDraggingHouseFeature] = useState(null); // feat id being dragged along wall
   const [editingHouse, setEditingHouse] = useState(false); // toggle house polygon vertex editing
   const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
   const [editingElementShape, setEditingElementShape] = useState(null); // yard element id being shape-edited
@@ -340,6 +341,25 @@ export default function YardView() {
       }
       return;
     }
+    // House feature dragging along wall edges
+    if (draggingHouseFeature && state.housePolygon) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const mx = toFt(svg.x), my = toFt(svg.y);
+      const poly = state.housePolygon;
+      // Find the closest point on any edge
+      let bestEdge = 0, bestT = 0.5, bestDist = Infinity;
+      for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length;
+        const { t, dist } = closestOnSegment(mx, my, poly[i].x, poly[i].y, poly[j].x, poly[j].y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestEdge = i;
+          bestT = Math.max(0.05, Math.min(0.95, t));
+        }
+      }
+      dispatch({ type: 'UPDATE_HOUSE_FEATURE', payload: { id: draggingHouseFeature, edgeIndex: bestEdge, t: bestT } });
+      return;
+    }
     // Yard element dragging
     if (draggingYardElement) {
       const svg = toSVG(e.clientX, e.clientY);
@@ -407,11 +427,12 @@ export default function YardView() {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
     setIsPanning(false);
     if (draggingHouseVertex !== null) { setDraggingHouseVertex(null); return; }
+    if (draggingHouseFeature) { setDraggingHouseFeature(null); return; }
     if (draggingElementVertex) { setDraggingElementVertex(null); return; }
     if (draggingYardElement) { setDraggingYardElement(null); return; }
     if (resizingYardElement) { setResizingYardElement(null); return; }
@@ -765,10 +786,11 @@ export default function YardView() {
       if (draggingYardElement) setDraggingYardElement(null);
       if (resizingYardElement) setResizingYardElement(null);
       if (rotatingYardElement) setRotatingYardElement(null);
+      if (draggingHouseFeature) setDraggingHouseFeature(null);
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [draggingYardElement, resizingYardElement, rotatingYardElement]);
+  }, [draggingYardElement, resizingYardElement, rotatingYardElement, draggingHouseFeature]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -1339,8 +1361,14 @@ export default function YardView() {
 
                   return (
                     <g key={feat.id} transform={`rotate(${angle} ${cx} ${cy})`}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: draggingHouseFeature === feat.id ? 'grabbing' : 'grab' }}
                       onClick={(e) => { e.stopPropagation(); setSelectedHouseFeature(feat.id); setHouseFeatureMenu(null); setSelectedYardElement(null); }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setSelectedHouseFeature(feat.id);
+                        setDraggingHouseFeature(feat.id);
+                      }}
                     >
                       {feat.type === 'door' ? (
                         <>
