@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store';
 import {
   Plus, Trash2, ZoomIn, ZoomOut, Maximize2, ArrowRight,
-  Home, Flower2, Move, GripVertical, Fence, X
+  Home, Flower2, Move, GripVertical, Fence, X,
+  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { ELEMENTS, ELEMENT_CATEGORIES, getElementById } from '../data/elements';
 import { ElementSVG } from './ElementRenderer';
@@ -99,6 +100,10 @@ export default function YardView() {
   const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
   const [editingElementShape, setEditingElementShape] = useState(null); // yard element id being shape-edited
   const [draggingElementVertex, setDraggingElementVertex] = useState(null); // { id, vertexIndex }
+
+  // Copy/paste clipboard
+  const [clipboardElement, setClipboardElement] = useState(null); // copied yard element data
+  const [copyFeedback, setCopyFeedback] = useState(null); // 'copied' | 'pasted' for brief toast
 
   const svgW = state.yardWidthFt * SCALE;
   const svgH = state.yardHeightFt * SCALE;
@@ -781,6 +786,32 @@ export default function YardView() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.editingPlotId && !draggingVertex) {
         handleDeletePlot();
       }
+      // Delete selected yard element
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedYardElement && !state.editingPlotId) {
+        dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: selectedYardElement });
+        setSelectedYardElement(null);
+        setEditingElementShape(null);
+      }
+      // Copy selected yard element (Ctrl+C)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedYardElement) {
+        const el = state.yardElements.find(y => y.id === selectedYardElement);
+        if (el) {
+          setClipboardElement({ ...el });
+          setCopyFeedback('copied');
+          setTimeout(() => setCopyFeedback(null), 1200);
+        }
+      }
+      // Paste yard element (Ctrl+V)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardElement) {
+        const newId = `yel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        dispatch({
+          type: 'DUPLICATE_YARD_ELEMENT',
+          payload: { sourceId: clipboardElement.id, offsetX: 2, offsetY: 2, newId },
+        });
+        setSelectedYardElement(newId);
+        setCopyFeedback('pasted');
+        setTimeout(() => setCopyFeedback(null), 1200);
+      }
       // Arrow nudge — move entire shape
       if (state.editingPlotId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
         e.preventDefault();
@@ -792,10 +823,20 @@ export default function YardView() {
           dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape } });
         }
       }
+      // Arrow nudge selected yard element
+      if (selectedYardElement && !state.editingPlotId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        const dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+        const el = state.yardElements.find(y => y.id === selectedYardElement);
+        if (el) {
+          dispatch({ type: 'MOVE_YARD_ELEMENT', payload: { id: el.id, x: el.x + dx, y: el.y + dy } });
+        }
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [state.editingPlotId, draggingVertex, handleDeletePlot, dispatch, state.plots]);
+  }, [state.editingPlotId, draggingVertex, handleDeletePlot, dispatch, state.plots, selectedYardElement, state.yardElements, clipboardElement]);
 
   const editingPlot = state.plots.find(p => p.id === state.editingPlotId);
 
@@ -921,6 +962,66 @@ export default function YardView() {
               >
                 <GripVertical className="w-3.5 h-3.5" /> {isEditing ? 'Done Shaping' : 'Edit Shape'}
               </button>
+            );
+          })()}
+
+          {/* Layer & Copy controls — visible when a yard element is selected */}
+          {selectedYardElement && (() => {
+            const el = state.yardElements.find(y => y.id === selectedYardElement);
+            if (!el) return null;
+            const idx = state.yardElements.indexOf(el);
+            const isFirst = idx === 0;
+            const isLast = idx === state.yardElements.length - 1;
+            return (
+              <>
+                {/* Copy button */}
+                <button
+                  onClick={() => {
+                    setClipboardElement({ ...el });
+                    setCopyFeedback('copied');
+                    setTimeout(() => setCopyFeedback(null), 1200);
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20 transition-all shadow-sm flex items-center gap-1"
+                  title="Copy (Ctrl+C)"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                {/* Layer controls */}
+                <div className="flex items-center bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20" style={{ gap: 0, padding: '0 2px' }}>
+                  <button
+                    onClick={() => dispatch({ type: 'REORDER_YARD_ELEMENT', payload: { id: el.id, direction: 'front' } })}
+                    disabled={isLast}
+                    className="p-1.5 rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors disabled:opacity-30"
+                    title="Bring to front"
+                  >
+                    <ChevronsUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: 'REORDER_YARD_ELEMENT', payload: { id: el.id, direction: 'forward' } })}
+                    disabled={isLast}
+                    className="p-1.5 rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors disabled:opacity-30"
+                    title="Bring forward"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: 'REORDER_YARD_ELEMENT', payload: { id: el.id, direction: 'backward' } })}
+                    disabled={isFirst}
+                    className="p-1.5 rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors disabled:opacity-30"
+                    title="Send backward"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: 'REORDER_YARD_ELEMENT', payload: { id: el.id, direction: 'back' } })}
+                    disabled={isFirst}
+                    className="p-1.5 rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors disabled:opacity-30"
+                    title="Send to back"
+                  >
+                    <ChevronsDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </>
             );
           })()}
 
@@ -1826,6 +1927,21 @@ export default function YardView() {
             </div>
           </div>
         )}
+
+        {/* Copy/paste feedback toast */}
+        <AnimatePresence>
+          {copyFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute bottom-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-xl bg-forest-deep/90 text-cream text-xs font-medium shadow-lg flex items-center gap-2"
+            >
+              {copyFeedback === 'copied' ? <Copy className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+              {copyFeedback === 'copied' ? 'Element copied — Ctrl+V to paste' : 'Element pasted'}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Compass rose — fixed in bottom-right corner */}
         <div className="absolute bottom-4 right-4 pointer-events-none">

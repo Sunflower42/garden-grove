@@ -298,6 +298,32 @@ export const ELEMENTS = [
     description: 'Feed your garden! Black gold production station.',
   },
 
+  // Walls
+  {
+    id: 'wall-straight',
+    name: 'Straight Wall',
+    category: 'hardscape',
+    widthIn: 6,
+    heightIn: 96,
+    color: '#8A7A6A',
+    borderColor: '#6A5A4A',
+    description: 'Stone or brick wall — retaining or decorative',
+    resizable: true,
+  },
+  {
+    id: 'wall-curved',
+    name: 'Curved Wall',
+    category: 'hardscape',
+    widthIn: 72,
+    heightIn: 48,
+    color: '#8A7A6A',
+    borderColor: '#6A5A4A',
+    description: 'Curved stone wall — reshape to create arcs',
+    resizable: true,
+    polygonEditable: true,
+    curved: true,
+  },
+
   // Protection
   {
     id: 'deer-fence-panel',

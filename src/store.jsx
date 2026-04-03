@@ -463,6 +463,40 @@ function reducer(state, action) {
         yardElements: state.yardElements.filter(el => el.id !== action.payload),
       };
     }
+    case 'DUPLICATE_YARD_ELEMENT': {
+      const { sourceId, offsetX, offsetY, newId } = action.payload;
+      const source = state.yardElements.find(el => el.id === sourceId);
+      if (!source) return state;
+      const dup = {
+        ...source,
+        id: newId || `yel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        x: source.x + (offsetX || 2),
+        y: source.y + (offsetY || 2),
+        polygon: source.polygon
+          ? source.polygon.map(pt => ({ x: pt.x + (offsetX || 2), y: pt.y + (offsetY || 2) }))
+          : undefined,
+      };
+      return { ...state, yardElements: [...state.yardElements, dup] };
+    }
+    case 'REORDER_YARD_ELEMENT': {
+      const { id, direction } = action.payload; // 'forward' | 'backward' | 'front' | 'back'
+      const idx = state.yardElements.findIndex(el => el.id === id);
+      if (idx === -1) return state;
+      const arr = [...state.yardElements];
+      const [item] = arr.splice(idx, 1);
+      if (direction === 'front') {
+        arr.push(item);
+      } else if (direction === 'back') {
+        arr.unshift(item);
+      } else if (direction === 'forward' && idx < arr.length) {
+        arr.splice(idx + 1, 0, item);
+      } else if (direction === 'backward' && idx > 0) {
+        arr.splice(idx - 1, 0, item);
+      } else {
+        arr.splice(idx, 0, item); // no change
+      }
+      return { ...state, yardElements: arr };
+    }
     case 'UPDATE_YARD_ELEMENT_POLYGON': {
       const { id, polygon } = action.payload;
       return {

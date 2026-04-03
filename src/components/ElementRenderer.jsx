@@ -251,6 +251,66 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             <circle key={i} cx={px + w * tx} cy={py + h * ty} r={w * 0.12} fill={element.borderColor} opacity={0.55} />
           ))}
         </g>
+      ) : element.id === 'wall-straight' ? (
+        // Straight wall — stone/brick texture
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill={element.color} stroke={element.borderColor} strokeWidth={2} rx={1} opacity={0.9} />
+          {/* Stone block lines */}
+          {w > h ? (
+            // Horizontal wall — vertical joints
+            <>
+              {Array.from({ length: Math.max(1, Math.floor(w / 10)) }).map((_, i) => {
+                const bx = px + 5 + i * 10;
+                if (bx >= px + w - 2) return null;
+                return <line key={i} x1={bx} y1={py + 1} x2={bx} y2={py + h - 1} stroke={element.borderColor} strokeWidth={0.8} opacity={0.5} />;
+              })}
+              {/* Horizontal mortar line */}
+              <line x1={px + 1} y1={py + h / 2} x2={px + w - 1} y2={py + h / 2} stroke={element.borderColor} strokeWidth={0.5} opacity={0.35} />
+            </>
+          ) : (
+            // Vertical wall — horizontal joints
+            <>
+              {Array.from({ length: Math.max(1, Math.floor(h / 10)) }).map((_, i) => {
+                const by = py + 5 + i * 10;
+                if (by >= py + h - 2) return null;
+                return <line key={i} x1={px + 1} y1={by} x2={px + w - 1} y2={by} stroke={element.borderColor} strokeWidth={0.8} opacity={0.5} />;
+              })}
+              {/* Vertical mortar line */}
+              <line x1={px + w / 2} y1={py + 1} x2={px + w / 2} y2={py + h - 1} stroke={element.borderColor} strokeWidth={0.5} opacity={0.35} />
+            </>
+          )}
+          {/* Cap stones — top edge highlight */}
+          <rect x={px} y={py} width={w} height={Math.min(h, w) > h ? 2 : w > h ? h * 0.15 : 2} fill={element.borderColor} opacity={0.3} rx={1} />
+        </g>
+      ) : element.id === 'wall-curved' ? (
+        // Curved wall — arc shape with stone texture
+        <g>
+          {/* Arc path */}
+          <path
+            d={`M ${px} ${py + h} Q ${px + w * 0.15} ${py} ${px + w / 2} ${py} Q ${px + w * 0.85} ${py} ${px + w} ${py + h}`}
+            fill="none"
+            stroke={element.color}
+            strokeWidth={Math.max(4, Math.min(w, h) * 0.12)}
+            strokeLinecap="round"
+            opacity={0.9}
+          />
+          {/* Outer edge */}
+          <path
+            d={`M ${px} ${py + h} Q ${px + w * 0.15} ${py} ${px + w / 2} ${py} Q ${px + w * 0.85} ${py} ${px + w} ${py + h}`}
+            fill="none"
+            stroke={element.borderColor}
+            strokeWidth={Math.max(6, Math.min(w, h) * 0.15)}
+            strokeLinecap="round"
+            opacity={0.4}
+          />
+          {/* Stone texture marks along the curve */}
+          {Array.from({ length: 5 }).map((_, i) => {
+            const t = (i + 1) / 6;
+            const cx = px + w * t;
+            const cy = py + h * (1 - Math.sin(t * Math.PI)) * 0.85;
+            return <circle key={i} cx={cx} cy={cy} r={1.5} fill={element.borderColor} opacity={0.4} />;
+          })}
+        </g>
       ) : (
         // Default rectangle
         <rect
