@@ -90,6 +90,8 @@ export default function YardView() {
   const [placingElement, setPlacingElement] = useState(null); // { elementId }
   const [elementPreviewPos, setElementPreviewPos] = useState(null);
   const [selectedYardElement, setSelectedYardElement] = useState(null); // element id
+  const [multiSelectedPlots, setMultiSelectedPlots] = useState(new Set()); // Set of plot ids
+  const [multiSelectedElements, setMultiSelectedElements] = useState(new Set()); // Set of yard element ids
   const [draggingYardElement, setDraggingYardElement] = useState(null); // { id, startX, startY, startElX, startElY }
   const [resizingYardElement, setResizingYardElement] = useState(null); // { id, handle, startX, startY, startW, startH }
   const [rotatingYardElement, setRotatingYardElement] = useState(null); // { id, startAngle, startRotation }
@@ -408,11 +410,30 @@ export default function YardView() {
       const dx = e.clientX - plotPending.startX;
       const dy = e.clientY - plotPending.startY;
       if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+        // Collect starting shapes for all multi-selected plots
+        const otherShapes = {};
+        if (multiSelectedPlots.size > 0) {
+          for (const pid of multiSelectedPlots) {
+            if (pid === plotPending.id) continue;
+            const p = state.plots.find(pp => pp.id === pid);
+            if (p) otherShapes[pid] = getPlotShape(p);
+          }
+        }
+        // Collect starting positions for multi-selected yard elements
+        const otherElements = {};
+        if (multiSelectedElements.size > 0) {
+          for (const eid of multiSelectedElements) {
+            const el = state.yardElements.find(yy => yy.id === eid);
+            if (el) otherElements[eid] = { x: el.x, y: el.y, polygon: el.polygon };
+          }
+        }
         setMovingPlot({
           id: plotPending.id,
           startMouseX: plotPending.startX,
           startMouseY: plotPending.startY,
           startShape: plotPending.startShape,
+          otherShapes,
+          otherElements,
         });
         setPlotPending(null);
       }
@@ -446,19 +467,30 @@ export default function YardView() {
       setPlotPending(null);
     }
     if (movingPlot && moveOffset) {
-      const plot = state.plots.find(p => p.id === movingPlot.id);
-      if (plot) {
-        const newShape = movingPlot.startShape.map(pt => ({
-          x: pt.x + moveOffset.dx,
-          y: pt.y + moveOffset.dy,
-        }));
-        dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: movingPlot.id, shape: newShape } });
+      // Move the primary plot
+      const newShape = movingPlot.startShape.map(pt => ({
+        x: pt.x + moveOffset.dx,
+        y: pt.y + moveOffset.dy,
+      }));
+      dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: movingPlot.id, shape: newShape } });
+      // Move other multi-selected plots
+      if (movingPlot.otherShapes) {
+        for (const [pid, startShape] of Object.entries(movingPlot.otherShapes)) {
+          const ns = startShape.map(pt => ({ x: pt.x + moveOffset.dx, y: pt.y + moveOffset.dy }));
+          dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: pid, shape: ns } });
+        }
+      }
+      // Move multi-selected yard elements
+      if (movingPlot.otherElements) {
+        for (const [eid, start] of Object.entries(movingPlot.otherElements)) {
+          dispatch({ type: 'MOVE_YARD_ELEMENT', payload: { id: eid, x: start.x + moveOffset.dx, y: start.y + moveOffset.dy } });
+        }
       }
       setMovingPlot(null);
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingElementVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
+  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -539,6 +571,25 @@ export default function YardView() {
   const handlePlotDragStart = useCallback((plot, e) => {
     e.stopPropagation();
     e.preventDefault();
+
+    // Shift+click: toggle multi-selection
+    if (e.shiftKey) {
+      setMultiSelectedPlots(prev => {
+        const next = new Set(prev);
+        if (next.has(plot.id)) next.delete(plot.id);
+        else next.add(plot.id);
+        return next;
+      });
+      dispatch({ type: 'SET_EDITING_PLOT', payload: plot.id });
+      return;
+    }
+
+    // Normal click: if this plot isn't in multi-selection, clear multi-selection
+    if (!multiSelectedPlots.has(plot.id)) {
+      setMultiSelectedPlots(new Set());
+      setMultiSelectedElements(new Set());
+    }
+
     dispatch({ type: 'SET_EDITING_PLOT', payload: plot.id });
 
     // If already editing this plot, check if we're near a vertex first
@@ -805,6 +856,8 @@ export default function YardView() {
         setDraggingElementVertex(null);
         setDraggingVertex(null);
         setMovingPlot(null);
+        setMultiSelectedPlots(new Set());
+        setMultiSelectedElements(new Set());
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.editingPlotId && !draggingVertex) {
         handleDeletePlot();
@@ -871,8 +924,11 @@ export default function YardView() {
   // Get display shape (with move offset applied)
   const getDisplayShape = (plot) => {
     let shape = getPlotShape(plot);
-    if (movingPlot?.id === plot.id && moveOffset) {
-      shape = shape.map(pt => ({ x: pt.x + moveOffset.dx, y: pt.y + moveOffset.dy }));
+    if (moveOffset) {
+      // Move primary plot or any multi-selected plot
+      if (movingPlot?.id === plot.id || (movingPlot?.otherShapes && plot.id in movingPlot.otherShapes)) {
+        shape = shape.map(pt => ({ x: pt.x + moveOffset.dx, y: pt.y + moveOffset.dy }));
+      }
     }
     return shape;
   };
@@ -1197,6 +1253,8 @@ export default function YardView() {
             setHouseFeatureMenu(null);
             setShowAddMenu(false);
             setShowElementMenu(false);
+            setMultiSelectedPlots(new Set());
+            setMultiSelectedElements(new Set());
           }
         }}
       >
@@ -1490,7 +1548,22 @@ export default function YardView() {
                 return (
                   <g key={el.id}
                     style={{ cursor: draggingYardElement?.id === el.id ? 'grabbing' : (isEditingShape ? 'default' : 'pointer') }}
-                    onClick={(e) => { e.stopPropagation(); setSelectedYardElement(el.id); dispatch({ type: 'SET_EDITING_PLOT', payload: null }); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (e.shiftKey) {
+                        setMultiSelectedElements(prev => {
+                          const next = new Set(prev);
+                          if (next.has(el.id)) next.delete(el.id);
+                          else next.add(el.id);
+                          return next;
+                        });
+                      } else {
+                        setMultiSelectedElements(new Set());
+                        setMultiSelectedPlots(new Set());
+                      }
+                      setSelectedYardElement(el.id);
+                      dispatch({ type: 'SET_EDITING_PLOT', payload: null });
+                    }}
                     onMouseDown={(e) => {
                       if (isEditingShape) return; // vertex editing handled by container mouseDown
                       e.stopPropagation();
@@ -1653,7 +1726,22 @@ export default function YardView() {
               return (
                 <g key={el.id} transform={`rotate(${rot} ${ecx} ${ecy})`}
                   style={{ cursor: draggingYardElement?.id === el.id ? 'grabbing' : 'pointer' }}
-                  onClick={(e) => { e.stopPropagation(); setSelectedYardElement(el.id); dispatch({ type: 'SET_EDITING_PLOT', payload: null }); }}
+                  onClick={(e) => {
+                      e.stopPropagation();
+                      if (e.shiftKey) {
+                        setMultiSelectedElements(prev => {
+                          const next = new Set(prev);
+                          if (next.has(el.id)) next.delete(el.id);
+                          else next.add(el.id);
+                          return next;
+                        });
+                      } else {
+                        setMultiSelectedElements(new Set());
+                        setMultiSelectedPlots(new Set());
+                      }
+                      setSelectedYardElement(el.id);
+                      dispatch({ type: 'SET_EDITING_PLOT', payload: null });
+                    }}
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -1690,6 +1778,12 @@ export default function YardView() {
                     cellSize={SCALE}
                     isSelected={isSelected}
                   />
+                  {/* Multi-selection highlight */}
+                  {multiSelectedElements.has(el.id) && !isSelected && (
+                    <rect x={ex - 2} y={ey - 2} width={ew + 4} height={eh + 4}
+                      fill="none" stroke="#8B6AAE" strokeWidth={2 / zoom} strokeDasharray="4 4" rx={3}
+                      style={{ pointerEvents: 'none' }} />
+                  )}
                   {/* Selection handles */}
                   {isSelected && (
                     <>
@@ -1780,6 +1874,7 @@ export default function YardView() {
             {state.plots.map((plot) => {
               const shape = getDisplayShape(plot);
               const isEditing = state.editingPlotId === plot.id;
+              const isMultiSelected = multiSelectedPlots.has(plot.id);
               const plantCount = plot.plants.length;
               const c = centroid(shape);
               const area = Math.round(polyArea(shape));
@@ -1797,8 +1892,8 @@ export default function YardView() {
                   <polygon
                     points={points}
                     fill="url(#soil)"
-                    stroke={isEditing ? '#C17644' : '#6B5B4A'}
-                    strokeWidth={isEditing ? 2.5 : 1.5}
+                    stroke={isEditing ? '#C17644' : isMultiSelected ? '#8B6AAE' : '#6B5B4A'}
+                    strokeWidth={isEditing ? 2.5 : isMultiSelected ? 2.5 : 1.5}
                     strokeLinejoin="round"
                     style={{ cursor: 'grab' }}
                     onMouseDown={(e) => handlePlotDragStart(plot, e)}
