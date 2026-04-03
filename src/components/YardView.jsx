@@ -786,6 +786,11 @@ export default function YardView() {
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.editingPlotId && !draggingVertex) {
         handleDeletePlot();
       }
+      // Delete selected house feature
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedHouseFeature) {
+        dispatch({ type: 'REMOVE_HOUSE_FEATURE', payload: selectedHouseFeature });
+        setSelectedHouseFeature(null);
+      }
       // Delete selected yard element
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedYardElement && !state.editingPlotId) {
         dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: selectedYardElement });
