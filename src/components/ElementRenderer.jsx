@@ -317,6 +317,90 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
               textAnchor="middle" fontSize={w / 12} fill="#F5F0E8" opacity={0.7}>♙</text>
           ))}
         </g>
+      ) : element.id === 'gazebo' ? (
+        // Gazebo — octagonal roof with posts
+        <g>
+          {/* Floor/base */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+            fill={element.color} stroke={element.borderColor} strokeWidth={2} opacity={0.85} />
+          {/* Roof (darker, slightly smaller) */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.42} ry={h * 0.42}
+            fill={element.borderColor} opacity={0.3} />
+          {/* Octagonal roof lines */}
+          {Array.from({ length: 8 }).map((_, i) => {
+            const angle = (i * 45 - 90) * Math.PI / 180;
+            return (
+              <line key={i}
+                x1={px + w / 2} y1={py + h / 2}
+                x2={px + w / 2 + Math.cos(angle) * w * 0.45}
+                y2={py + h / 2 + Math.sin(angle) * h * 0.45}
+                stroke={element.borderColor} strokeWidth={1} opacity={0.4} />
+            );
+          })}
+          {/* Posts at corners */}
+          {Array.from({ length: 8 }).map((_, i) => {
+            const angle = (i * 45 - 90) * Math.PI / 180;
+            return (
+              <circle key={`p${i}`}
+                cx={px + w / 2 + Math.cos(angle) * w * 0.42}
+                cy={py + h / 2 + Math.sin(angle) * h * 0.42}
+                r={2} fill={element.borderColor} opacity={0.7} />
+            );
+          })}
+          {/* Cupola center */}
+          <circle cx={px + w / 2} cy={py + h / 2} r={w * 0.06} fill={element.borderColor} opacity={0.5} />
+        </g>
+      ) : element.id === 'chicken-coop' ? (
+        // Chicken coop — house section + wire run
+        <g>
+          {/* Run area (wire mesh) */}
+          <rect x={px} y={py} width={w} height={h}
+            fill="#E8DDD0" stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.7} />
+          {/* Wire mesh pattern */}
+          {Array.from({ length: Math.max(1, Math.floor(w / 8)) }).map((_, i) => (
+            <line key={`v${i}`} x1={px + 4 + i * 8} y1={py + h * 0.35} x2={px + 4 + i * 8} y2={py + h - 2}
+              stroke={element.borderColor} strokeWidth={0.3} opacity={0.3} />
+          ))}
+          {Array.from({ length: Math.max(1, Math.floor(h * 0.65 / 8)) }).map((_, i) => (
+            <line key={`h${i}`} x1={px + 2} y1={py + h * 0.35 + 4 + i * 8} x2={px + w - 2} y2={py + h * 0.35 + 4 + i * 8}
+              stroke={element.borderColor} strokeWidth={0.3} opacity={0.3} />
+          ))}
+          {/* Coop house (top third) */}
+          <rect x={px} y={py} width={w} height={h * 0.35}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Roof peak */}
+          <line x1={px} y1={py + h * 0.05} x2={px + w} y2={py + h * 0.05}
+            stroke={element.borderColor} strokeWidth={2} opacity={0.5} />
+          {/* Door */}
+          <rect x={px + w * 0.4} y={py + h * 0.12} width={w * 0.2} height={h * 0.22}
+            fill={element.borderColor} rx={1} opacity={0.5} />
+          {/* Chicken emoji */}
+          <text x={px + w * 0.15} y={py + h * 0.75} fontSize={Math.min(w, h) * 0.18} opacity={0.5}>🐔</text>
+        </g>
+      ) : element.id === 'bunny-hutch' ? (
+        // Bunny hutch — raised box with mesh front
+        <g>
+          {/* Hutch body */}
+          <rect x={px} y={py} width={w} height={h * 0.75}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Legs */}
+          <rect x={px + w * 0.08} y={py + h * 0.7} width={w * 0.08} height={h * 0.3}
+            fill={element.borderColor} rx={1} opacity={0.7} />
+          <rect x={px + w * 0.84} y={py + h * 0.7} width={w * 0.08} height={h * 0.3}
+            fill={element.borderColor} rx={1} opacity={0.7} />
+          {/* Mesh front (right half) */}
+          <rect x={px + w * 0.5} y={py + h * 0.08} width={w * 0.45} height={h * 0.58}
+            fill="#E8E0D0" stroke={element.borderColor} strokeWidth={0.8} rx={1} opacity={0.6} />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <line key={i} x1={px + w * 0.55 + i * w * 0.13} y1={py + h * 0.1} x2={px + w * 0.55 + i * w * 0.13} y2={py + h * 0.63}
+              stroke={element.borderColor} strokeWidth={0.4} opacity={0.35} />
+          ))}
+          {/* Solid door (left half) */}
+          <rect x={px + w * 0.05} y={py + h * 0.08} width={w * 0.4} height={h * 0.58}
+            fill={element.borderColor} rx={1} opacity={0.3} />
+          {/* Bunny emoji */}
+          <text x={px + w * 0.6} y={py + h * 0.52} fontSize={Math.min(w, h) * 0.3} opacity={0.4}>🐰</text>
+        </g>
       ) : element.id === 'bistro-set' ? (
         // Bistro — small round table + 2 chairs
         <g>
