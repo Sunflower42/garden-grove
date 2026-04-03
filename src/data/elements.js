@@ -135,6 +135,18 @@ export const ELEMENTS = [
     resizable: true,
   },
   {
+    id: 'gravel-circle',
+    name: 'Gravel Circle',
+    category: 'path',
+    widthIn: 96,
+    heightIn: 96,
+    color: '#C4B69A',
+    borderColor: '#A89878',
+    description: 'Circular gravel pad — great around a fire pit or fountain',
+    circular: true,
+    resizable: true,
+  },
+  {
     id: 'stepping-stones',
     name: 'Stepping Stones',
     category: 'path',

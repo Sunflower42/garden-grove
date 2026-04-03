@@ -63,6 +63,27 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             />
           ))}
         </g>
+      ) : element.id === 'gravel-circle' ? (
+        // Gravel circle — circular pad with gravel texture
+        <g>
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.5} opacity={0.8} />
+          {/* Gravel texture dots */}
+          {Array.from({ length: Math.floor(w * h / 150) }).map((_, i) => {
+            const rng = seededRandom(i * 37 + 11);
+            const angle = rng() * Math.PI * 2;
+            const radius = rng() * 0.42;
+            const cx = px + w / 2 + Math.cos(angle) * w * radius;
+            const cy = py + h / 2 + Math.sin(angle) * h * radius;
+            return (
+              <circle key={i} cx={cx} cy={cy} r={1 + rng() * 1.5}
+                fill={element.borderColor} opacity={0.25 + rng() * 0.15} />
+            );
+          })}
+          {/* Border ring */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.47} ry={h * 0.47}
+            fill="none" stroke={element.borderColor} strokeWidth={0.5} opacity={0.2} />
+        </g>
       ) : element.id.includes('path') || element.id.includes('stepping') ? (
         // Path rendering — textured
         <g>
