@@ -855,7 +855,7 @@ export default function YardView() {
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar relative z-20" style={{ padding: '16px 24px' }}>
+      <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar relative z-20 flex-wrap" style={{ padding: '12px 24px', gap: 8 }}>
         <div className="flex items-center" style={{ gap: 12 }}>
           <div className="w-7 h-7 rounded-lg bg-terra/10 flex items-center justify-center">
             <Home className="w-3.5 h-3.5 text-terra" />
@@ -1309,10 +1309,10 @@ export default function YardView() {
                   const inY = (dot >= 0 ? ny : -ny);
 
                   const wPx = feat.widthFt * SCALE;
-                  const depthPx = (feat.type === 'garage-door' ? 1.5 : feat.type === 'door' ? 3 : 1.5) * SCALE;
-                  // Offset center inward so feature sits inside the house wall
-                  const cx = edgeX + inX * depthPx / 2;
-                  const cy = edgeY + inY * depthPx / 2;
+                  const depthPx = (feat.type === 'garage-door' ? 1.5 : feat.type === 'door' ? 1 : 1) * SCALE;
+                  // Center feature on the wall edge (not offset inward)
+                  const cx = edgeX;
+                  const cy = edgeY;
                   const isSelFeat = selectedHouseFeature === feat.id;
 
                   return (
@@ -1324,8 +1324,18 @@ export default function YardView() {
                         <>
                           <rect x={cx - wPx / 2} y={cy - depthPx / 2} width={wPx} height={depthPx}
                             fill="#6B4B2A" stroke="#4A3A1A" strokeWidth={1.5 / zoom} rx={1} />
-                          {/* Knob */}
-                          <circle cx={cx + wPx * 0.3} cy={cy} r={1.5 / zoom} fill="#C4A060" />
+                          {feat.widthFt >= 5 ? (
+                            <>
+                              {/* Double door — center line + two knobs */}
+                              <line x1={cx} y1={cy - depthPx / 2 + 1} x2={cx} y2={cy + depthPx / 2 - 1}
+                                stroke="#4A3A1A" strokeWidth={1 / zoom} opacity={0.7} />
+                              <circle cx={cx - 2 / zoom} cy={cy} r={1.5 / zoom} fill="#C4A060" />
+                              <circle cx={cx + 2 / zoom} cy={cy} r={1.5 / zoom} fill="#C4A060" />
+                            </>
+                          ) : (
+                            /* Single door — one knob */
+                            <circle cx={cx + wPx * 0.3} cy={cy} r={1.5 / zoom} fill="#C4A060" />
+                          )}
                         </>
                       ) : feat.type === 'garage-door' ? (
                         <>
@@ -1351,12 +1361,37 @@ export default function YardView() {
                         </>
                       )}
 
-                      {/* Selection highlight + delete */}
+                      {/* Selection highlight + resize + delete */}
                       {isSelFeat && (
                         <>
                           <rect x={cx - wPx / 2 - 3 / zoom} y={cy - depthPx / 2 - 3 / zoom}
                             width={wPx + 6 / zoom} height={depthPx + 6 / zoom}
                             fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="4 2" rx={2} />
+                          {/* Width label */}
+                          <text x={cx} y={cy + depthPx / 2 + 12 / zoom}
+                            textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={0.8}
+                            style={{ pointerEvents: 'none' }}>
+                            {feat.widthFt}'
+                          </text>
+                          {/* Resize wider button */}
+                          <g style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'UPDATE_HOUSE_FEATURE', payload: { id: feat.id, widthFt: feat.widthFt + 1 } }); }}
+                          >
+                            <circle cx={cx + wPx / 2 + 2 / zoom} cy={cy} r={6 / zoom}
+                              fill="#4A7A3A" stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                            <text x={cx + wPx / 2 + 2 / zoom} y={cy + 3 / zoom}
+                              textAnchor="middle" fontSize={10 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">+</text>
+                          </g>
+                          {/* Resize narrower button */}
+                          <g style={{ cursor: 'pointer' }}
+                            onClick={(e) => { e.stopPropagation(); if (feat.widthFt > 1) dispatch({ type: 'UPDATE_HOUSE_FEATURE', payload: { id: feat.id, widthFt: feat.widthFt - 1 } }); }}
+                          >
+                            <circle cx={cx - wPx / 2 - 2 / zoom} cy={cy} r={6 / zoom}
+                              fill={feat.widthFt > 1 ? '#C17644' : '#AAA'} stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                            <text x={cx - wPx / 2 - 2 / zoom} y={cy + 3 / zoom}
+                              textAnchor="middle" fontSize={10 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">−</text>
+                          </g>
+                          {/* Delete button */}
                           <g style={{ cursor: 'pointer' }}
                             onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_HOUSE_FEATURE', payload: feat.id }); setSelectedHouseFeature(null); }}
                           >
@@ -1898,7 +1933,7 @@ export default function YardView() {
                 Add to wall
               </div>
               {[
-                { type: 'door', label: 'Door', widthFt: 3, icon: '🚪' },
+                { type: 'door', label: 'Door (3ft)', widthFt: 3, icon: '🚪' },
                 { type: 'window', label: 'Window', widthFt: 3, icon: '🪟' },
                 { type: 'garage-door', label: 'Garage Door', widthFt: 9, icon: '🏠' },
               ].map(opt => (
