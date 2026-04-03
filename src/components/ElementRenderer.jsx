@@ -251,6 +251,25 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             <circle key={i} cx={px + w * tx} cy={py + h * ty} r={w * 0.12} fill={element.borderColor} opacity={0.55} />
           ))}
         </g>
+      ) : element.id === 'concrete-steps' ? (
+        // Concrete steps — 3 descending treads
+        <g>
+          {[0, 1, 2].map(i => {
+            const stepY = py + (i * h / 3);
+            const stepH = h / 3;
+            const inset = i * w * 0.06;
+            return (
+              <g key={i}>
+                <rect x={px + inset} y={stepY} width={w - inset * 2} height={stepH}
+                  fill={i === 0 ? '#C4B8AA' : i === 1 ? '#B8AAA0' : '#ACA096'}
+                  stroke={element.borderColor} strokeWidth={1} rx={1} opacity={0.9} />
+                {/* Tread edge shadow */}
+                <line x1={px + inset} y1={stepY + stepH - 1} x2={px + w - inset} y2={stepY + stepH - 1}
+                  stroke={element.borderColor} strokeWidth={0.8} opacity={0.4} />
+              </g>
+            );
+          })}
+        </g>
       ) : element.id === 'pool' ? (
         // Swimming pool — water with lane lines and coping
         <g>

@@ -312,6 +312,19 @@ export const ELEMENTS = [
     polygonEditable: true,
   },
 
+  // Steps
+  {
+    id: 'concrete-steps',
+    name: 'Concrete Steps',
+    category: 'hardscape',
+    widthIn: 48,
+    heightIn: 36,
+    color: '#B8AAA0',
+    borderColor: '#98887A',
+    description: 'Set of 3 concrete steps — resize width to fit',
+    resizable: true,
+  },
+
   // Walls
   {
     id: 'wall-straight',
