@@ -327,21 +327,19 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
           ))}
         </g>
       ) : element.id === 'concrete-bench' ? (
-        // Concrete bench — slab seat on two block legs
+        // Concrete bench — solid slab, no legs (wall-mount style)
         <g>
-          {/* Legs */}
-          <rect x={px + w * 0.05} y={py + h * 0.5} width={w * 0.15} height={h * 0.5}
-            fill={element.borderColor} rx={1} opacity={0.85} />
-          <rect x={px + w * 0.8} y={py + h * 0.5} width={w * 0.15} height={h * 0.5}
-            fill={element.borderColor} rx={1} opacity={0.85} />
-          {/* Seat slab */}
-          <rect x={px} y={py + h * 0.25} width={w} height={h * 0.3}
+          {/* Slab */}
+          <rect x={px} y={py} width={w} height={h}
             fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
-          {/* Broom finish lines on seat */}
+          {/* Broom finish lines */}
           {Array.from({ length: Math.max(1, Math.floor(w / 8)) }).map((_, i) => (
-            <line key={i} x1={px + 3 + i * 8} y1={py + h * 0.27} x2={px + 3 + i * 8} y2={py + h * 0.53}
+            <line key={i} x1={px + 3 + i * 8} y1={py + 1} x2={px + 3 + i * 8} y2={py + h - 1}
               stroke={element.borderColor} strokeWidth={0.3} opacity={0.3} />
           ))}
+          {/* Front edge shadow */}
+          <line x1={px} y1={py + h - 1} x2={px + w} y2={py + h - 1}
+            stroke={element.borderColor} strokeWidth={1} opacity={0.4} />
         </g>
       ) : element.id === 'concrete-steps' ? (
         // Concrete steps — 3 descending treads
