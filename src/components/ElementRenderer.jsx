@@ -232,6 +232,48 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             fill="none" stroke={element.borderColor} strokeWidth={1} opacity={0.5}
           />
         </g>
+      ) : element.id === 'lounge-chair' ? (
+        // Sun lounge chair — recliner with headrest
+        <g>
+          {/* Frame/legs */}
+          <rect x={px + w * 0.08} y={py + h * 0.05} width={w * 0.84} height={h * 0.9}
+            fill="none" stroke={element.borderColor} strokeWidth={1.5} rx={3} opacity={0.6} />
+          {/* Seat pad */}
+          <rect x={px + w * 0.12} y={py + h * 0.2} width={w * 0.76} height={h * 0.7}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1} rx={2} opacity={0.85} />
+          {/* Raised headrest */}
+          <rect x={px + w * 0.12} y={py + h * 0.06} width={w * 0.76} height={h * 0.18}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1} rx={2} opacity={0.9} />
+          {/* Cushion quilt lines */}
+          {[0.38, 0.52, 0.66, 0.78].map((t, i) => (
+            <line key={i} x1={px + w * 0.15} y1={py + h * t} x2={px + w * 0.85} y2={py + h * t}
+              stroke={element.borderColor} strokeWidth={0.5} opacity={0.3} />
+          ))}
+        </g>
+      ) : element.id === 'dining-table-rect' ? (
+        // Rectangular dining table with 6 chairs
+        <g>
+          {/* Table */}
+          <rect x={px + w * 0.15} y={py + h * 0.2} width={w * 0.7} height={h * 0.6}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={3} opacity={0.85} />
+          {/* Chairs — 2 on each long side, 1 on each short side */}
+          {/* Top row */}
+          {[0.33, 0.67].map((t, i) => (
+            <rect key={`t${i}`} x={px + w * t - w * 0.07} y={py} width={w * 0.14} height={h * 0.17}
+              fill={element.borderColor} rx={2} opacity={0.6} />
+          ))}
+          {/* Bottom row */}
+          {[0.33, 0.67].map((t, i) => (
+            <rect key={`b${i}`} x={px + w * t - w * 0.07} y={py + h * 0.83} width={w * 0.14} height={h * 0.17}
+              fill={element.borderColor} rx={2} opacity={0.6} />
+          ))}
+          {/* Left end */}
+          <rect x={px} y={py + h * 0.4} width={w * 0.12} height={h * 0.2}
+            fill={element.borderColor} rx={2} opacity={0.6} />
+          {/* Right end */}
+          <rect x={px + w * 0.88} y={py + h * 0.4} width={w * 0.12} height={h * 0.2}
+            fill={element.borderColor} rx={2} opacity={0.6} />
+        </g>
       ) : element.id === 'patio-dining' ? (
         // Patio dining — round table + 4 chair dots
         <g>
