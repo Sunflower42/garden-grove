@@ -312,6 +312,17 @@ export const ELEMENTS = [
     polygonEditable: true,
   },
 
+  {
+    id: 'concrete-bench',
+    name: 'Concrete Bench',
+    category: 'hardscape',
+    widthIn: 48,
+    heightIn: 18,
+    color: '#B8AAA0',
+    borderColor: '#98887A',
+    description: 'Solid concrete bench — modern and durable',
+  },
+
   // Steps
   {
     id: 'concrete-steps',

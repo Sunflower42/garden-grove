@@ -251,6 +251,23 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             <circle key={i} cx={px + w * tx} cy={py + h * ty} r={w * 0.12} fill={element.borderColor} opacity={0.55} />
           ))}
         </g>
+      ) : element.id === 'concrete-bench' ? (
+        // Concrete bench — slab seat on two block legs
+        <g>
+          {/* Legs */}
+          <rect x={px + w * 0.05} y={py + h * 0.5} width={w * 0.15} height={h * 0.5}
+            fill={element.borderColor} rx={1} opacity={0.85} />
+          <rect x={px + w * 0.8} y={py + h * 0.5} width={w * 0.15} height={h * 0.5}
+            fill={element.borderColor} rx={1} opacity={0.85} />
+          {/* Seat slab */}
+          <rect x={px} y={py + h * 0.25} width={w} height={h * 0.3}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Broom finish lines on seat */}
+          {Array.from({ length: Math.max(1, Math.floor(w / 8)) }).map((_, i) => (
+            <line key={i} x1={px + 3 + i * 8} y1={py + h * 0.27} x2={px + 3 + i * 8} y2={py + h * 0.53}
+              stroke={element.borderColor} strokeWidth={0.3} opacity={0.3} />
+          ))}
+        </g>
       ) : element.id === 'concrete-steps' ? (
         // Concrete steps — 3 descending treads
         <g>
