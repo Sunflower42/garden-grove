@@ -1173,6 +1173,17 @@ export default function YardView() {
                             type: 'ADD_PLOT',
                             payload: { name: tpl.name, icon: tpl.icon, widthFt: tpl.w, heightFt: tpl.h, startX: cx, startY: cy },
                           });
+                          // Auto-zoom to show the new plot
+                          if (rect && zoom && panOffset) {
+                            const plotCx = (cx + tpl.w / 2) * SCALE;
+                            const plotCy = (cy + tpl.h / 2) * SCALE;
+                            const newZoom = Math.min(4, Math.max(zoom, (rect.width * 0.6) / (tpl.w * SCALE)));
+                            setPanOffset({
+                              x: rect.width / 2 - plotCx * newZoom,
+                              y: rect.height / 2 - plotCy * newZoom,
+                            });
+                            setZoom(newZoom);
+                          }
                         }
                         setShowAddMenu(false);
                       }}
@@ -1522,6 +1533,27 @@ export default function YardView() {
               </button>
             );
           })()}
+
+          {/* Scale quadrant group */}
+          {editingPlot?.quadrantGroupId && (
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId: editingPlot.quadrantGroupId, scale: 0.9 } })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
+                title="Shrink quadrant group 10%"
+              >
+                −
+              </button>
+              <span className="text-[10px] text-sage-dark/60">Size</span>
+              <button
+                onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId: editingPlot.quadrantGroupId, scale: 1.1 } })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
+                title="Grow quadrant group 10%"
+              >
+                +
+              </button>
+            </div>
+          )}
 
           {/* Delete selected plot(s) */}
           {(editingPlot || multiSelectedPlots.size > 0) && (

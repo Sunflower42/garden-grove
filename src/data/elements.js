@@ -62,6 +62,7 @@ export const ELEMENTS = [
     borderColor: '#8B6B4A',
     description: 'Octagonal gazebo — shade and seating focal point',
     circular: true,
+    resizable: true,
   },
   {
     id: 'pergola',
@@ -143,6 +144,7 @@ export const ELEMENTS = [
     borderColor: '#3A2A1A',
     description: 'Gathering spot with seating area',
     circular: true,
+    resizable: true,
   },
 
   // Paths
@@ -367,6 +369,53 @@ export const ELEMENTS = [
     polygonEditable: true,
   },
 
+  {
+    id: 'shrub-border',
+    name: 'Shrub Border',
+    category: 'path',
+    widthIn: 96,
+    heightIn: 24,
+    color: '#3A6A2A',
+    borderColor: '#2A5A1A',
+    description: 'Hedge or shrub row — resize to fit along fences or edges',
+    resizable: true,
+  },
+
+  {
+    id: 'strip-lights',
+    name: 'LED Strip Lights',
+    category: 'decor',
+    widthIn: 96,
+    heightIn: 4,
+    color: '#3A3A3A',
+    borderColor: '#2A2A2A',
+    description: 'LED strip — along edges, steps, planters, or under caps',
+    resizable: true,
+  },
+  {
+    id: 'string-lights',
+    name: 'String Lights',
+    category: 'decor',
+    widthIn: 120,
+    heightIn: 12,
+    color: '#3A3A3A',
+    borderColor: '#2A2A2A',
+    description: 'Draped string lights — resize to span between posts or structures',
+    resizable: true,
+  },
+
+  {
+    id: 'wall-fountain',
+    name: 'Wall Fountain',
+    category: 'water',
+    widthIn: 36,
+    heightIn: 18,
+    color: '#7A8A9A',
+    borderColor: '#5A6A7A',
+    description: 'Wall-mounted water feature — place against a wall or fence',
+    resizable: true,
+  },
+
   // Decor & Support
   {
     id: 'obelisk-trellis',
@@ -587,7 +636,18 @@ export const ELEMENTS = [
     curved: true,
   },
 
-  // Protection
+  // Protection & Fencing
+  {
+    id: 'fence-short',
+    name: 'Short Fence',
+    category: 'protection',
+    widthIn: 4,
+    heightIn: 48,
+    color: '#9A7A5A',
+    borderColor: '#7A5A3A',
+    description: 'Low fence or railing — 4ft, resize to fit',
+    resizable: true,
+  },
   {
     id: 'deer-fence-panel',
     name: 'Deer Fence Panel',

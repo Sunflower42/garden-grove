@@ -91,6 +91,111 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             </>
           )}
         </g>
+      ) : element.id === 'strip-lights' ? (
+        // LED strip lights — thin glowing line
+        <g>
+          {/* Housing */}
+          <rect x={px} y={py} width={w} height={h} fill="#3A3A3A" stroke="#2A2A2A" strokeWidth={0.5} rx={h / 2} opacity={0.8} />
+          {/* Glow */}
+          <rect x={px + 1} y={py + h * 0.15} width={w - 2} height={h * 0.7} fill="#FFE8A0" rx={h / 3} opacity={0.4} />
+          {/* LED segments */}
+          {Array.from({ length: Math.max(3, Math.floor(w / 4)) }).map((_, i) => {
+            const lx = px + 1.5 + i * ((w - 3) / Math.max(2, Math.floor(w / 4)));
+            return (
+              <rect key={i} x={lx} y={py + h * 0.2} width={2} height={h * 0.6}
+                fill={i % 2 === 0 ? '#FFF8E0' : '#FFE8A0'} rx={0.5} opacity={0.8} />
+            );
+          })}
+        </g>
+      ) : element.id === 'wall-fountain' ? (
+        // Wall fountain — stone back with basin
+        <g>
+          {/* Back wall/mounting plate */}
+          <rect x={px} y={py} width={w} height={h * 0.4} fill="#8A9AAA" stroke="#6A7A8A" strokeWidth={1} rx={1} opacity={0.9} />
+          {/* Stone texture on back */}
+          {Array.from({ length: Math.max(2, Math.floor(w / 8)) }).map((_, i) => (
+            <line key={`st-${i}`} x1={px + 3 + i * 8} y1={py + 1} x2={px + 3 + i * 8} y2={py + h * 0.38}
+              stroke="#6A7A8A" strokeWidth={0.3} opacity={0.4} />
+          ))}
+          {/* Spout */}
+          <rect x={px + w / 2 - 1.5} y={py + h * 0.25} width={3} height={h * 0.2}
+            fill="#5A6A7A" rx={0.5} opacity={0.8} />
+          {/* Basin */}
+          <ellipse cx={px + w / 2} cy={py + h * 0.7} rx={w * 0.4} ry={h * 0.25}
+            fill="#6A8A9A" stroke="#5A7A8A" strokeWidth={1} opacity={0.8} />
+          {/* Water surface */}
+          <ellipse cx={px + w / 2} cy={py + h * 0.65} rx={w * 0.32} ry={h * 0.15}
+            fill="#8AB8D8" opacity={0.5} />
+          {/* Water ripples */}
+          <ellipse cx={px + w / 2} cy={py + h * 0.65} rx={w * 0.2} ry={h * 0.08}
+            fill="none" stroke="#A0D0F0" strokeWidth={0.4} opacity={0.5} />
+          <ellipse cx={px + w / 2} cy={py + h * 0.68} rx={w * 0.12} ry={h * 0.05}
+            fill="none" stroke="#A0D0F0" strokeWidth={0.3} opacity={0.4} />
+        </g>
+      ) : element.id === 'string-lights' ? (
+        // String lights — catenary wire with bulbs
+        <g>
+          {/* Wire — gentle droop */}
+          <path
+            d={`M ${px} ${py + h * 0.3} Q ${px + w * 0.25} ${py + h * 0.8} ${px + w * 0.5} ${py + h * 0.5} Q ${px + w * 0.75} ${py + h * 0.2} ${px + w} ${py + h * 0.35}`}
+            fill="none" stroke="#4A4A4A" strokeWidth={0.8} opacity={0.6}
+          />
+          {/* Second wire for a crossed look */}
+          <path
+            d={`M ${px} ${py + h * 0.4} Q ${px + w * 0.3} ${py + h * 0.1} ${px + w * 0.5} ${py + h * 0.45} Q ${px + w * 0.7} ${py + h * 0.85} ${px + w} ${py + h * 0.3}`}
+            fill="none" stroke="#4A4A4A" strokeWidth={0.8} opacity={0.5}
+          />
+          {/* Bulbs along both wires */}
+          {Array.from({ length: Math.max(4, Math.floor(w / 8)) }).map((_, i) => {
+            const t = (i + 0.5) / Math.max(4, Math.floor(w / 8));
+            // Position along first wire (approximate catenary)
+            const bx = px + t * w;
+            const sag1 = Math.sin(t * Math.PI) * h * 0.3;
+            const by1 = py + h * 0.3 + sag1 * (t < 0.5 ? 1 : -0.3);
+            // Alternate warm white / amber
+            const bulbColor = i % 3 === 0 ? '#FFF4D0' : i % 3 === 1 ? '#FFE8A0' : '#FFFBE6';
+            return (
+              <g key={`bulb-${i}`}>
+                {/* Glow */}
+                <circle cx={bx} cy={by1} r={2.5} fill={bulbColor} opacity={0.25} />
+                {/* Bulb */}
+                <circle cx={bx} cy={by1} r={1.2} fill={bulbColor} stroke="#C8B060" strokeWidth={0.3} opacity={0.9} />
+              </g>
+            );
+          })}
+          {/* Endpoint posts/hooks */}
+          <circle cx={px + 1} cy={py + h * 0.3} r={1.5} fill="#5A5A5A" opacity={0.7} />
+          <circle cx={px + w - 1} cy={py + h * 0.35} r={1.5} fill="#5A5A5A" opacity={0.7} />
+        </g>
+      ) : element.id === 'shrub-border' ? (
+        // Shrub border — row of rounded mounds
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill="#2A5A1A" stroke="#1A4A0A" strokeWidth={0.5} rx={h / 2} opacity={0.3} />
+          {(() => {
+            const shrubs = [];
+            const isHorizontal = w >= h;
+            const shrubR = isHorizontal ? Math.min(h / 2, 6) : Math.min(w / 2, 6);
+            const count = isHorizontal
+              ? Math.max(2, Math.round(w / (shrubR * 2.2)))
+              : Math.max(2, Math.round(h / (shrubR * 2.2)));
+            for (let i = 0; i < count; i++) {
+              const t = (i + 0.5) / count;
+              const sx = isHorizontal ? px + t * w : px + w / 2 + (i % 2 === 0 ? -0.5 : 0.5);
+              const sy = isHorizontal ? py + h / 2 + (i % 2 === 0 ? -0.5 : 0.5) : py + t * h;
+              const r = shrubR * (0.85 + (i % 3) * 0.1);
+              const shade = i % 3 === 0 ? '#3A7A2A' : i % 3 === 1 ? '#4A8A3A' : '#2A6A1A';
+              shrubs.push(
+                <circle key={`sh-${i}`} cx={sx} cy={sy} r={r} fill={shade} opacity={0.8} />
+              );
+              // Highlight
+              shrubs.push(
+                <circle key={`hl-${i}`} cx={sx - r * 0.2} cy={sy - r * 0.25} r={r * 0.4}
+                  fill="#5AAA4A" opacity={0.3} />
+              );
+            }
+            return shrubs;
+          })()}
+        </g>
       ) : element.id === 'curved-bed' ? (
         // Curved planting bed — green with mulch texture
         <g>

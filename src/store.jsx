@@ -319,6 +319,35 @@ function reducer(state, action) {
         plots: [...state.plots, ...newPlots],
       };
     }
+    case 'SCALE_QUADRANT_GROUP': {
+      const { groupId, scale } = action.payload;
+      const groupPlots = state.plots.filter(p => p.quadrantGroupId === groupId);
+      if (groupPlots.length === 0) return state;
+      // Find center of the group
+      const allPts = groupPlots.flatMap(p => p.shape || []);
+      const cx = allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length;
+      const cy = allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length;
+      return {
+        ...state,
+        plots: state.plots.map(p => {
+          if (p.quadrantGroupId !== groupId) return p;
+          const newShape = (p.shape || []).map(pt => ({
+            x: parseFloat((cx + (pt.x - cx) * scale).toFixed(2)),
+            y: parseFloat((cy + (pt.y - cy) * scale).toFixed(2)),
+          }));
+          const xs = newShape.map(pt => pt.x);
+          const ys = newShape.map(pt => pt.y);
+          return {
+            ...p,
+            shape: newShape,
+            yardX: Math.round(Math.min(...xs)),
+            yardY: Math.round(Math.min(...ys)),
+            widthFt: Math.max(2, Math.round(Math.max(...xs) - Math.min(...xs))),
+            heightFt: Math.max(2, Math.round(Math.max(...ys) - Math.min(...ys))),
+          };
+        }),
+      };
+    }
     case 'ADD_PLOT': {
       const w = action.payload.widthFt || 10;
       const h = action.payload.heightFt || 8;
