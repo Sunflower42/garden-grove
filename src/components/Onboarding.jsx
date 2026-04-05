@@ -260,8 +260,8 @@ export default function Onboarding() {
   };
 
   const handleMapDimensions = useCallback((w, h, polygonFt, houseFt, geoVertices, satImgUrl) => {
-    setYardWidth(Math.max(20, Math.min(500, w)));
-    setYardHeight(Math.max(20, Math.min(500, h)));
+    setYardWidth(Math.max(20, w));
+    setYardHeight(Math.max(20, h));
     if (polygonFt) setYardPolygon(polygonFt);
     if (houseFt !== undefined) setHousePolygon(houseFt);
     if (geoVertices) setYardGeoVertices(geoVertices);

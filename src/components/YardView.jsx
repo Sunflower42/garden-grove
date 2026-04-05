@@ -1567,26 +1567,83 @@ export default function YardView() {
               </>
             )}
 
-            {/* Satellite overlay */}
+            {/* Satellite overlay — uses slippy map tiles for fast, correct rendering */}
             {showSatellite && state.yardGeoVertices && state.yardGeoVertices.length >= 3 && (() => {
-              // Always construct URL from geo vertices to ensure correct aspect ratio
-              const lats = state.yardGeoVertices.map(v => v[0]);
-              const lngs = state.yardGeoVertices.map(v => v[1]);
+              const geoVerts = state.yardGeoVertices;
+              const lats = geoVerts.map(v => v[0]);
+              const lngs = geoVerts.map(v => v[1]);
               const minLat = Math.min(...lats), maxLat = Math.max(...lats);
               const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-              const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
-              const aspect = svgW / (svgH || 1);
-              const maxPx = 1024;
-              const imgW = aspect >= 1 ? maxPx : Math.round(maxPx * aspect);
-              const imgH = aspect >= 1 ? Math.round(maxPx / aspect) : maxPx;
-              const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${imgW},${imgH}&format=jpg&f=image`;
+
+              // verticesToFeet maps geo bbox to feet using:
+              //   x = (lng - minLng) / lngPerFt
+              //   y = (maxLat - lat) / latPerFt
+              // The feet coordinates are in the same space as yardPolygon.
+              // SVG units = feet * SCALE
+              const cLat = (minLat + maxLat) / 2;
+              const latPerFt = 1 / 364000;
+              const lngPerFt = 1 / (364000 * Math.cos(cLat * Math.PI / 180));
+              const geoBboxWFt = (maxLng - minLng) / lngPerFt;
+              const geoBboxHFt = (maxLat - minLat) / latPerFt;
+              const geoBboxWSvg = geoBboxWFt * SCALE;
+              const geoBboxHSvg = geoBboxHFt * SCALE;
+
+              // Use zoom level 19 for ~0.3m/px resolution
+              const tileZoom = 19;
+              const n = Math.pow(2, tileZoom);
+
+              const lng2tileX = (lng) => ((lng + 180) / 360) * n;
+              const lat2tileY = (lat) => {
+                const rad = lat * Math.PI / 180;
+                return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n;
+              };
+
+              const xMin = lng2tileX(minLng);
+              const xMax = lng2tileX(maxLng);
+              const yMin = lat2tileY(maxLat);
+              const yMax = lat2tileY(minLat);
+
+              const tileXMin = Math.floor(xMin);
+              const tileXMax = Math.floor(xMax);
+              const tileYMin = Math.floor(yMin);
+              const tileYMax = Math.floor(yMax);
+
+              const totalPxLeft = tileXMin * 256;
+              const totalPxTop = tileYMin * 256;
+
+              const bboxPxLeft = xMin * 256 - totalPxLeft;
+              const bboxPxTop = yMin * 256 - totalPxTop;
+              const bboxPxW = (xMax - xMin) * 256;
+              const bboxPxH = (yMax - yMin) * 256;
+
+              // Scale from tile pixels to SVG units using the geo bbox size in SVG units
+              const scaleX = geoBboxWSvg / bboxPxW;
+              const scaleY = geoBboxHSvg / bboxPxH;
+
+              const tiles = [];
+              for (let ty = tileYMin; ty <= tileYMax; ty++) {
+                for (let tx = tileXMin; tx <= tileXMax; tx++) {
+                  const px = (tx * 256 - totalPxLeft - bboxPxLeft) * scaleX;
+                  const py = (ty * 256 - totalPxTop - bboxPxTop) * scaleY;
+                  const pw = 256 * scaleX;
+                  const ph = 256 * scaleY;
+                  tiles.push(
+                    <foreignObject key={`sat-${tx}-${ty}`} x={px} y={py} width={pw} height={ph}
+                      style={{ pointerEvents: 'none', overflow: 'hidden' }}>
+                      <img
+                        src={`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${tileZoom}/${ty}/${tx}`}
+                        alt="" style={{ width: pw, height: ph, display: 'block' }}
+                        loading="lazy"
+                      />
+                    </foreignObject>
+                  );
+                }
+              }
+
               return (
-                <foreignObject x={0} y={0} width={svgW} height={svgH}
-                  clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}
-                  style={{ pointerEvents: 'none' }}>
-                  <img src={url} alt=""
-                    style={{ width: svgW, height: svgH, objectFit: 'fill', opacity: 0.9, display: 'block' }} />
-                </foreignObject>
+                <g opacity={0.9} clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}>
+                  {tiles}
+                </g>
               );
             })()}
 
