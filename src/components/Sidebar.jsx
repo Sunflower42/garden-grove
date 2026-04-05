@@ -25,9 +25,14 @@ export default function Sidebar() {
     <aside className="h-full flex flex-col border-r border-sage/15 bg-cream-dark dark:bg-midnight-green dark:border-sage-dark/20 grain-texture shrink-0" style={{ width: 264 }}>
       {/* Logo */}
       <div className="relative z-10" style={{ padding: '28px 24px 20px' }}>
-        <div className="flex items-center" style={{ gap: 16 }}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-forest-deep dark:from-sage-dark dark:to-forest flex items-center justify-center shadow-sm">
-            <Leaf className="w-5 h-5 text-cream" />
+        <div className="flex items-center" style={{ gap: 14 }}>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-forest to-forest-deep dark:from-sage-dark dark:to-forest flex items-center justify-center shadow-sm shrink-0">
+            <svg width="24" height="24" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M28 40 L28 22" stroke="#FDF6E9" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M28 28 Q20 22 16 14 Q22 18 28 22" stroke="#FDF6E9" strokeWidth="1.8" fill="#A8B99C" fillOpacity="0.4" strokeLinecap="round" />
+              <path d="M28 25 Q36 18 40 10 Q34 16 28 20" stroke="#FDF6E9" strokeWidth="1.8" fill="#A8B99C" fillOpacity="0.4" strokeLinecap="round" />
+              <path d="M28 32 Q22 28 18 22 Q24 26 28 28" stroke="#FDF6E9" strokeWidth="1.5" fill="#A8B99C" fillOpacity="0.3" strokeLinecap="round" />
+            </svg>
           </div>
           <div>
             <h1 className="font-display text-xl font-semibold text-forest-deep dark:text-cream leading-tight tracking-tight">

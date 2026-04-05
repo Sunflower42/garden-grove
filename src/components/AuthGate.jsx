@@ -142,7 +142,7 @@ export default function AuthGate({ children }) {
       <div className="relative z-10 w-full min-h-full flex flex-col items-center justify-center px-6">
         {/* Logo — matches Onboarding */}
         <motion.div
-          className="text-center mb-12"
+          className="text-center" style={{ marginBottom: 48 }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.1 }}
@@ -159,7 +159,7 @@ export default function AuthGate({ children }) {
           <h1 className="font-display text-6xl font-light text-cream tracking-tight leading-none">
             Garden Grove
           </h1>
-          <p className="text-sage-light/60 mt-4 font-light text-sm tracking-[0.15em] uppercase">
+          <p className="text-sage-light/60 font-light text-sm tracking-[0.15em] uppercase" style={{ marginTop: 16 }}>
             Plan my paradise
           </p>
         </motion.div>
@@ -173,7 +173,7 @@ export default function AuthGate({ children }) {
         >
           <div className="rounded-2xl border border-white/8 bg-white/5 backdrop-blur-sm shadow-2xl"
             style={{ padding: '32px' }}>
-            <p className="text-center text-cream/70 text-sm mb-6 font-light">
+            <p className="text-center text-cream/70 text-sm font-light" style={{ marginBottom: 24 }}>
               {step === 'phone' ? 'Sign in with your phone number' : 'Enter the code we sent you'}
             </p>
 

@@ -376,9 +376,9 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
   const mapRef = useRef(null);
   const initialized = useRef(false);
 
-  // Create initial polygon (rectangle) from center + dimensions
+  // Create initial polygon (rectangle) from center + dimensions — start at 40% so it fits in view
   const createInitialPolygon = useCallback((lat, lng, w, h) => {
-    const { dLat, dLng } = feetToLatLng(lat, w, h);
+    const { dLat, dLng } = feetToLatLng(lat, w * 0.4, h * 0.4);
     return [
       [lat + dLat / 2, lng - dLng / 2],
       [lat + dLat / 2, lng + dLng / 2],
@@ -416,7 +416,19 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
     const { width, height } = boundingBoxFt(yardVertices);
     const polygonFt = verticesToFeet(yardVertices, yardVertices);
     const houseFt = verticesToFeet(houseVertices, yardVertices);
-    onDimensionsChange(width, height, polygonFt, houseFt, yardVertices);
+    // Build satellite image URL from yard bounding box (no padding — must match verticesToFeet)
+    const lats = yardVertices.map(v => v[0]);
+    const lngs = yardVertices.map(v => v[1]);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
+    // Match aspect ratio to yard dimensions for correct alignment
+    const aspect = width / (height || 1);
+    const maxPx = 1024;
+    const satW = aspect >= 1 ? maxPx : Math.round(maxPx * aspect);
+    const satH = aspect >= 1 ? Math.round(maxPx / aspect) : maxPx;
+    const satUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${satW},${satH}&format=jpg&f=image`;
+    onDimensionsChange(width, height, polygonFt, houseFt, yardVertices, satUrl);
   }, [yardVertices, houseVertices, onDimensionsChange]);
 
   // Geocode address
@@ -460,12 +472,13 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col" style={{ gap: 20 }}>
+      {/* Address search */}
       <div>
-        <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/40 mb-2.5 block">
+        <label className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cream/40 block" style={{ marginBottom: 10 }}>
           {center ? 'Wrong spot? Search again' : 'Look Up Address'}
         </label>
-        <div className="flex gap-2">
+        <div className="flex" style={{ gap: 8 }}>
           <div className="relative flex-1">
             <input
               type="text"
@@ -473,45 +486,55 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
               onChange={e => setAddress(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="123 Main St, City, State"
-              className="w-full px-4 py-3 pr-10 text-sm bg-white/[0.08] border border-cream/20 rounded-xl text-cream placeholder:text-cream/25 focus:border-cream/35 focus:bg-white/[0.12] focus:outline-none focus:ring-1 focus:ring-cream/15 transition-all"
+              className="w-full text-sm bg-white/[0.08] border border-cream/20 rounded-xl text-cream placeholder:text-cream/25 focus:border-cream/35 focus:bg-white/[0.12] focus:outline-none focus:ring-1 focus:ring-cream/15 transition-all"
+              style={{ padding: '12px 40px 12px 16px' }}
             />
             <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/20" />
           </div>
           <button
             onClick={handleSearch}
             disabled={searching || !address.trim()}
-            className="px-4 py-3 bg-cream/15 border border-cream/20 text-cream text-xs font-medium rounded-xl hover:bg-cream/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
+            className="bg-cream/15 border border-cream/20 text-cream text-xs font-medium rounded-xl hover:bg-cream/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center shrink-0"
+            style={{ padding: '12px 20px', gap: 6, minWidth: 72 }}
           >
             <Search className="w-3.5 h-3.5" />
             {searching ? '...' : 'Find'}
           </button>
         </div>
-        {error && <p className="text-bloom-pink text-xs mt-2">{error}</p>}
+        {error && <p className="text-bloom-pink text-xs" style={{ marginTop: 8 }}>{error}</p>}
       </div>
 
       {/* Layer toggle */}
       {center && (
-        <div className="flex gap-2">
+        <div className="flex" style={{ gap: 8 }}>
           <button
             onClick={() => setActiveLayer('yard')}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+            style={activeLayer === 'yard'
+              ? { background: 'rgba(76, 175, 80, 0.2)', borderColor: 'rgba(76, 175, 80, 0.5)', padding: '10px 16px' }
+              : { padding: '10px 16px' }}
+            className={`flex-1 flex items-center justify-center rounded-xl text-xs font-medium transition-all border ${
               activeLayer === 'yard'
-                ? 'bg-cream/15 border-cream/30 text-cream'
+                ? 'text-green-300'
                 : 'bg-transparent border-cream/10 text-cream/40 hover:border-cream/20 hover:text-cream/60'
             }`}
           >
-            <Fence className="w-3.5 h-3.5" />
+            <span style={{ width: 10, height: 10, borderRadius: 3, border: '2px solid #4CAF50', display: 'inline-block', flexShrink: 0, marginRight: 8 }} />
+            <Fence className="w-3.5 h-3.5" style={{ marginRight: 6 }} />
             Yard Boundary
           </button>
           <button
             onClick={() => setActiveLayer('house')}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+            style={activeLayer === 'house'
+              ? { background: 'rgba(193, 118, 68, 0.25)', borderColor: 'rgba(193, 118, 68, 0.5)', padding: '10px 16px' }
+              : { padding: '10px 16px' }}
+            className={`flex-1 flex items-center justify-center rounded-xl text-xs font-medium transition-all border ${
               activeLayer === 'house'
-                ? 'bg-terra/20 border-terra/40 text-cream'
+                ? 'text-orange-300'
                 : 'bg-transparent border-cream/10 text-cream/40 hover:border-cream/20 hover:text-cream/60'
             }`}
           >
-            <Home className="w-3.5 h-3.5" />
+            <span style={{ width: 10, height: 10, borderRadius: 3, border: '2px solid #C17644', display: 'inline-block', flexShrink: 0, marginRight: 8 }} />
+            <Home className="w-3.5 h-3.5" style={{ marginRight: 6 }} />
             House Outline
           </button>
         </div>
@@ -534,17 +557,17 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
               maxZoom={22}
             />
             <MapController center={center} />
-            {/* Yard polygon */}
+            {/* Yard polygon — green */}
             {yardVertices && (
               <PolygonEditor
                 vertices={yardVertices}
                 onChange={setYardVertices}
-                color="#FDF6E9"
-                fillColor="#FDF6E9"
+                color="#4CAF50"
+                fillColor="#4CAF50"
                 isActive={activeLayer === 'yard'}
               />
             )}
-            {/* House polygon */}
+            {/* House polygon — terra/orange */}
             {houseVertices && (
               <PolygonEditor
                 vertices={houseVertices}

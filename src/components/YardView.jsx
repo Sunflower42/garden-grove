@@ -157,6 +157,24 @@ export default function YardView() {
       );
       fitX = rect.width / 2 - ((allMinX + allMaxX) / 2 * SCALE) * fitZoom;
       fitY = rect.height / 2 - ((allMinY + allMaxY) / 2 * SCALE) * fitZoom;
+    } else if (state.housePolygon && state.housePolygon.length >= 3) {
+      // No plots yet — zoom to fit around the house with generous padding
+      const hxs = state.housePolygon.map(p => p.x);
+      const hys = state.housePolygon.map(p => p.y);
+      const hPad = 40; // feet of padding around the house
+      const hMinX = Math.max(0, Math.min(...hxs) - hPad);
+      const hMinY = Math.max(0, Math.min(...hys) - hPad);
+      const hMaxX = Math.min(state.yardWidthFt, Math.max(...hxs) + hPad);
+      const hMaxY = Math.min(state.yardHeightFt, Math.max(...hys) + hPad);
+      const hW = (hMaxX - hMinX) * SCALE;
+      const hH = (hMaxY - hMinY) * SCALE;
+      fitZoom = Math.min(
+        (rect.width - padding * 2) / hW,
+        (rect.height - padding * 2) / hH,
+        4
+      );
+      fitX = rect.width / 2 - ((hMinX + hMaxX) / 2 * SCALE) * fitZoom;
+      fitY = rect.height / 2 - ((hMinY + hMaxY) / 2 * SCALE) * fitZoom;
     } else {
       fitZoom = fitToScreen;
       fitX = (rect.width - svgW * fitZoom) / 2;
@@ -1153,7 +1171,7 @@ export default function YardView() {
           <div className="relative">
             <button
               onClick={() => {
-                if (state.yardGeoVertices) {
+                if (state.satelliteUrl || state.yardGeoVertices) {
                   setShowSatellite(!showSatellite);
                 } else {
                   setShowSatellitePrompt(!showSatellitePrompt);
@@ -1168,7 +1186,7 @@ export default function YardView() {
               <Satellite className="w-3.5 h-3.5" /> Satellite
             </button>
             <AnimatePresence>
-              {showSatellitePrompt && !state.yardGeoVertices && (
+              {showSatellitePrompt && !state.yardGeoVertices && !state.satelliteUrl && (
                 <motion.div
                   initial={{ opacity: 0, y: -4, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1532,39 +1550,43 @@ export default function YardView() {
                     <polygon points={state.yardPolygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ')} />
                   </clipPath>
                 </defs>
-                <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" clipPath="url(#yard-clip)" opacity={0.95} />
+                {!showSatellite && (
+                  <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" clipPath="url(#yard-clip)" opacity={0.95} />
+                )}
                 <polygon
                   points={state.yardPolygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ')}
-                  fill="none" stroke="#5A8A3A" strokeWidth={1.5} strokeLinejoin="round"
+                  fill="none" stroke={showSatellite ? "#fff" : "#5A8A3A"} strokeWidth={1.5} strokeLinejoin="round"
+                  opacity={showSatellite ? 0.4 : 1}
                 />
               </>
             ) : (
-              <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" rx={4} stroke="#5A8A3A" strokeWidth={1} opacity={0.95} />
+              <>
+                {!showSatellite && (
+                  <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" rx={4} stroke="#5A8A3A" strokeWidth={1} opacity={0.95} />
+                )}
+              </>
             )}
 
             {/* Satellite overlay */}
             {showSatellite && state.yardGeoVertices && state.yardGeoVertices.length >= 3 && (() => {
+              // Always construct URL from geo vertices to ensure correct aspect ratio
               const lats = state.yardGeoVertices.map(v => v[0]);
               const lngs = state.yardGeoVertices.map(v => v[1]);
               const minLat = Math.min(...lats), maxLat = Math.max(...lats);
               const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
-              // Add a small padding to the bounding box
-              const padLat = (maxLat - minLat) * 0.05;
-              const padLng = (maxLng - minLng) * 0.05;
-              const bbox = `${minLng - padLng},${minLat - padLat},${maxLng + padLng},${maxLat + padLat}`;
-              const imgW = Math.round(svgW * 2); // 2x for sharpness
-              const imgH = Math.round(svgH * 2);
-              const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${imgW},${imgH}&format=png&f=image`;
+              const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
+              const aspect = svgW / (svgH || 1);
+              const maxPx = 1024;
+              const imgW = aspect >= 1 ? maxPx : Math.round(maxPx * aspect);
+              const imgH = aspect >= 1 ? Math.round(maxPx / aspect) : maxPx;
+              const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${imgW},${imgH}&format=jpg&f=image`;
               return (
-                <image
-                  href={url}
-                  x={0} y={0}
-                  width={svgW} height={svgH}
-                  opacity={0.7}
-                  preserveAspectRatio="none"
+                <foreignObject x={0} y={0} width={svgW} height={svgH}
                   clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}
-                  style={{ pointerEvents: 'none' }}
-                />
+                  style={{ pointerEvents: 'none' }}>
+                  <img src={url} alt=""
+                    style={{ width: svgW, height: svgH, objectFit: 'fill', opacity: 0.9, display: 'block' }} />
+                </foreignObject>
               );
             })()}
 

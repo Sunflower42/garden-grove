@@ -145,6 +145,7 @@ export default function Onboarding() {
   const [yardPolygon, setYardPolygon] = useState(null); // [{x,y}] in feet
   const [housePolygon, setHousePolygon] = useState(null); // [{x,y}] in feet
   const [yardGeoVertices, setYardGeoVertices] = useState(null); // [[lat,lng]] from map
+  const [satelliteUrl, setSatelliteUrl] = useState(null);
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
 
@@ -258,12 +259,13 @@ export default function Onboarding() {
     }
   };
 
-  const handleMapDimensions = useCallback((w, h, polygonFt, houseFt, geoVertices) => {
+  const handleMapDimensions = useCallback((w, h, polygonFt, houseFt, geoVertices, satImgUrl) => {
     setYardWidth(Math.max(20, Math.min(500, w)));
     setYardHeight(Math.max(20, Math.min(500, h)));
     if (polygonFt) setYardPolygon(polygonFt);
     if (houseFt !== undefined) setHousePolygon(houseFt);
     if (geoVertices) setYardGeoVertices(geoVertices);
+    if (satImgUrl) setSatelliteUrl(satImgUrl);
   }, []);
 
   const currentYear = new Date().getFullYear();
@@ -283,6 +285,7 @@ export default function Onboarding() {
         yardPolygon,
         housePolygon,
         yardGeoVertices,
+        satelliteUrl,
       },
     });
   };
@@ -494,9 +497,9 @@ export default function Onboarding() {
                   transition={{ duration: 0.3 }}
                   className="flex flex-col"
                 >
-                  <div className="text-center mb-10">
+                  <div className="text-center" style={{ marginBottom: 32 }}>
                     <h2 className="font-display text-3xl font-light text-cream">My Yard</h2>
-                    <p className="text-cream/40 mt-5 text-sm">
+                    <p className="text-cream/40 text-sm" style={{ marginTop: 16 }}>
                       Drag the points to trace the outline of the yard. Click an edge to add a point.
                     </p>
                   </div>
@@ -511,7 +514,7 @@ export default function Onboarding() {
                   />
 
                   {/* Dimensions summary */}
-                  <div className="text-center mt-8 mb-3">
+                  <div className="text-center" style={{ marginTop: 28, marginBottom: 12 }}>
                     <span className="font-display text-xl text-cream/80">{yardWidth}' × {yardHeight}'</span>
                     <span className="text-cream/30 ml-2 text-sm">
                       bounding box · {(yardWidth * yardHeight).toLocaleString()} sq ft
@@ -519,7 +522,7 @@ export default function Onboarding() {
                     </span>
                   </div>
 
-                  <div className="flex gap-4" style={{ marginTop: '2.5rem' }}>
+                  <div className="flex" style={{ marginTop: 32, gap: 16 }}>
                     <button
                       onClick={() => setStep(1)}
                       className="px-4 py-3.5 border border-cream/15 text-cream/60 rounded-2xl hover:bg-white/5 transition-all"
