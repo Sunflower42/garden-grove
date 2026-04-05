@@ -6,7 +6,7 @@ import { Leaf, Phone, ArrowRight, Loader2 } from 'lucide-react';
 export default function AuthGate({ children }) {
   const { user, loading } = useAuth();
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [code, setCode] = useState('');
   const [step, setStep] = useState('phone'); // 'phone' | 'code'
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,8 +39,13 @@ export default function AuthGate({ children }) {
     setSubmitting(true);
     try {
       const normalized = normalizePhone(phone);
-      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalized });
-      if (otpError) throw otpError;
+      const res = await fetch('/api/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send code');
       setPhone(normalized);
       setStep('code');
     } catch (err) {
@@ -55,12 +60,20 @@ export default function AuthGate({ children }) {
     setError('');
     setSubmitting(true);
     try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        phone,
-        token: otp,
-        type: 'sms',
+      const res = await fetch('/api/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, code }),
       });
-      if (verifyError) throw verifyError;
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Verification failed');
+
+      // Sign in with the credentials returned by the API
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+      if (signInError) throw signInError;
     } catch (err) {
       setError(err.message);
     } finally {
@@ -129,8 +142,8 @@ export default function AuthGate({ children }) {
               type="text"
               inputMode="numeric"
               placeholder="6-digit code"
-              value={otp}
-              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              value={code}
+              onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               required
               maxLength={6}
               className="w-full rounded-xl border border-sage/20 bg-white text-sm text-soil text-center tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest/40 placeholder:text-sage/50 placeholder:tracking-normal"
@@ -144,7 +157,7 @@ export default function AuthGate({ children }) {
 
             <button
               type="submit"
-              disabled={submitting || otp.length < 6}
+              disabled={submitting || code.length < 6}
               className="w-full flex items-center justify-center rounded-xl bg-forest text-cream text-sm font-medium hover:bg-forest-deep transition-colors disabled:opacity-60"
               style={{ padding: '12px 16px', gap: 8, marginTop: 4 }}
             >
@@ -160,7 +173,7 @@ export default function AuthGate({ children }) {
 
             <button
               type="button"
-              onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+              onClick={() => { setStep('phone'); setCode(''); setError(''); }}
               className="text-xs text-forest font-medium hover:text-forest-deep transition-colors text-center"
               style={{ marginTop: 4 }}
             >
