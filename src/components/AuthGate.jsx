@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../AuthContext';
-import { Leaf, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
+import { Leaf, Phone, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function AuthGate({ children }) {
   const { user, loading } = useAuth();
-  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [step, setStep] = useState('phone'); // 'phone' | 'code'
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [confirmSent, setConfirmSent] = useState(false);
 
   // If supabase isn't configured, skip auth entirely (local dev without env vars)
   if (!supabase) return children;
@@ -25,20 +24,25 @@ export default function AuthGate({ children }) {
 
   if (user) return children;
 
-  const handleSubmit = async (e) => {
+  // Normalize phone to E.164 format
+  const normalizePhone = (raw) => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('1') && digits.length === 11) return `+${digits}`;
+    if (digits.length === 10) return `+1${digits}`;
+    if (raw.startsWith('+')) return raw;
+    return `+${digits}`;
+  };
+
+  const handleSendCode = async (e) => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
-
     try {
-      if (mode === 'signup') {
-        const { error: signUpError } = await supabase.auth.signUp({ email, password });
-        if (signUpError) throw signUpError;
-        setConfirmSent(true);
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInError) throw signInError;
-      }
+      const normalized = normalizePhone(phone);
+      const { error: otpError } = await supabase.auth.signInWithOtp({ phone: normalized });
+      if (otpError) throw otpError;
+      setPhone(normalized);
+      setStep('code');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -46,28 +50,23 @@ export default function AuthGate({ children }) {
     }
   };
 
-  if (confirmSent) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-cream grain-texture">
-        <div className="w-full max-w-sm text-center" style={{ padding: 32 }}>
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-forest to-forest-deep flex items-center justify-center shadow-lg mx-auto">
-            <Mail className="w-8 h-8 text-cream" />
-          </div>
-          <h2 className="font-display text-xl font-semibold text-forest-deep" style={{ marginTop: 24 }}>Check your email</h2>
-          <p className="text-sm text-sage-dark" style={{ marginTop: 12 }}>
-            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come back here to sign in.
-          </p>
-          <button
-            onClick={() => { setConfirmSent(false); setMode('signin'); }}
-            className="text-sm text-forest font-medium hover:text-forest-deep transition-colors"
-            style={{ marginTop: 24 }}
-          >
-            Back to sign in
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone,
+        token: otp,
+        type: 'sms',
+      });
+      if (verifyError) throw verifyError;
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="h-screen flex items-center justify-center bg-cream grain-texture">
@@ -81,75 +80,94 @@ export default function AuthGate({ children }) {
             Garden Grove
           </h1>
           <p className="text-sm text-sage-dark" style={{ marginTop: 4 }}>
-            {mode === 'signin' ? 'Welcome back to your garden' : 'Start planning your paradise'}
+            {step === 'phone' ? 'Sign in with your phone number' : 'Enter the code we sent you'}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sage-dark/50" />
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full rounded-xl border border-sage/20 bg-white text-sm text-soil focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest/40 placeholder:text-sage/50"
-              style={{ padding: '12px 12px 12px 40px' }}
-            />
-          </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sage-dark/50" />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full rounded-xl border border-sage/20 bg-white text-sm text-soil focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest/40 placeholder:text-sage/50"
-              style={{ padding: '12px 12px 12px 40px' }}
-            />
-          </div>
+        {step === 'phone' ? (
+          <form onSubmit={handleSendCode} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sage-dark/50" />
+              <input
+                type="tel"
+                placeholder="(555) 123-4567"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                required
+                className="w-full rounded-xl border border-sage/20 bg-white text-sm text-soil focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest/40 placeholder:text-sage/50"
+                style={{ padding: '12px 12px 12px 40px' }}
+                autoFocus
+              />
+            </div>
 
-          {error && (
-            <p className="text-xs text-bloom-red" style={{ padding: '0 4px' }}>{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full flex items-center justify-center rounded-xl bg-forest text-cream text-sm font-medium hover:bg-forest-deep transition-colors disabled:opacity-60"
-            style={{ padding: '12px 16px', gap: 8, marginTop: 4 }}
-          >
-            {submitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                {mode === 'signin' ? 'Sign In' : 'Create Account'}
-                <ArrowRight className="w-4 h-4" />
-              </>
+            {error && (
+              <p className="text-xs text-bloom-red" style={{ padding: '0 4px' }}>{error}</p>
             )}
-          </button>
-        </form>
 
-        <p className="text-center text-xs text-sage-dark" style={{ marginTop: 20 }}>
-          {mode === 'signin' ? (
-            <>
-              Don&apos;t have an account?{' '}
-              <button onClick={() => { setMode('signup'); setError(''); }} className="text-forest font-medium hover:text-forest-deep transition-colors">
-                Sign up
-              </button>
-            </>
-          ) : (
-            <>
-              Already have an account?{' '}
-              <button onClick={() => { setMode('signin'); setError(''); }} className="text-forest font-medium hover:text-forest-deep transition-colors">
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full flex items-center justify-center rounded-xl bg-forest text-cream text-sm font-medium hover:bg-forest-deep transition-colors disabled:opacity-60"
+              style={{ padding: '12px 16px', gap: 8, marginTop: 4 }}
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Send Code
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p className="text-xs text-sage-dark text-center" style={{ marginBottom: 4 }}>
+              Code sent to <strong>{phone}</strong>
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="6-digit code"
+              value={otp}
+              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              required
+              maxLength={6}
+              className="w-full rounded-xl border border-sage/20 bg-white text-sm text-soil text-center tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-forest/30 focus:border-forest/40 placeholder:text-sage/50 placeholder:tracking-normal"
+              style={{ padding: '12px 16px', fontSize: 18 }}
+              autoFocus
+            />
+
+            {error && (
+              <p className="text-xs text-bloom-red" style={{ padding: '0 4px' }}>{error}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting || otp.length < 6}
+              className="w-full flex items-center justify-center rounded-xl bg-forest text-cream text-sm font-medium hover:bg-forest-deep transition-colors disabled:opacity-60"
+              style={{ padding: '12px 16px', gap: 8, marginTop: 4 }}
+            >
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  Verify & Sign In
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setStep('phone'); setOtp(''); setError(''); }}
+              className="text-xs text-forest font-medium hover:text-forest-deep transition-colors text-center"
+              style={{ marginTop: 4 }}
+            >
+              Use a different number
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

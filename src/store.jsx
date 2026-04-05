@@ -615,6 +615,9 @@ function reducer(state, action) {
     case 'UPDATE_HOUSE_POLYGON': {
       return { ...state, housePolygon: action.payload };
     }
+    case 'SET_YARD_GEO': {
+      return { ...state, yardGeoVertices: action.payload };
+    }
     case 'ADD_HOUSE_VERTEX': {
       const { index, point } = action.payload;
       const newPoly = [...state.housePolygon];

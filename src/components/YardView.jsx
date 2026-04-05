@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   Plus, Trash2, ZoomIn, ZoomOut, Maximize2, ArrowRight,
   Home, Flower2, Move, GripVertical, Fence, X,
-  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown, RotateCw, Undo, Satellite
+  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown, RotateCw, Undo, Satellite, MapPin, Search
 } from 'lucide-react';
 import { ELEMENTS, ELEMENT_CATEGORIES, getElementById } from '../data/elements';
 import { ElementSVG } from './ElementRenderer';
@@ -112,6 +112,9 @@ export default function YardView() {
 
   // Satellite overlay
   const [showSatellite, setShowSatellite] = useState(false);
+  const [showSatellitePrompt, setShowSatellitePrompt] = useState(false);
+  const [satAddress, setSatAddress] = useState('');
+  const [satSearching, setSatSearching] = useState(false);
 
   const svgW = state.yardWidthFt * SCALE;
   const svgH = state.yardHeightFt * SCALE;
@@ -1147,9 +1150,15 @@ export default function YardView() {
           )}
 
           {/* Satellite overlay toggle */}
-          {state.yardGeoVertices && (
+          <div className="relative">
             <button
-              onClick={() => setShowSatellite(!showSatellite)}
+              onClick={() => {
+                if (state.yardGeoVertices) {
+                  setShowSatellite(!showSatellite);
+                } else {
+                  setShowSatellitePrompt(!showSatellitePrompt);
+                }
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
                 showSatellite
                   ? 'bg-terra text-cream'
@@ -1158,7 +1167,67 @@ export default function YardView() {
             >
               <Satellite className="w-3.5 h-3.5" /> Satellite
             </button>
-          )}
+            <AnimatePresence>
+              {showSatellitePrompt && !state.yardGeoVertices && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-10 z-30 w-72 bg-white dark:bg-midnight-green rounded-2xl shadow-xl shadow-black/10 border border-sage/15 dark:border-sage-dark/20 p-4"
+                >
+                  <p className="text-xs text-sage-dark/70 dark:text-sage/60 mb-2">Enter your address to load satellite imagery:</p>
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!satAddress.trim() || satSearching) return;
+                    setSatSearching(true);
+                    try {
+                      const res = await fetch(
+                        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(satAddress)}&limit=1&countrycodes=us`,
+                        { headers: { 'User-Agent': 'GardenGrove/1.0' } }
+                      );
+                      const data = await res.json();
+                      if (data.length > 0) {
+                        const lat = parseFloat(data[0].lat);
+                        const lng = parseFloat(data[0].lon);
+                        // Build geo vertices from yard dimensions centered on address
+                        const latPerFt = 1 / 364000;
+                        const lngPerFt = 1 / (364000 * Math.cos(lat * Math.PI / 180));
+                        const halfW = (state.yardWidthFt / 2) * lngPerFt;
+                        const halfH = (state.yardHeightFt / 2) * latPerFt;
+                        const geoVerts = [
+                          [lat + halfH, lng - halfW],
+                          [lat + halfH, lng + halfW],
+                          [lat - halfH, lng + halfW],
+                          [lat - halfH, lng - halfW],
+                        ];
+                        dispatch({ type: 'SET_YARD_GEO', payload: geoVerts });
+                        setShowSatellite(true);
+                        setShowSatellitePrompt(false);
+                      }
+                    } catch { /* ignore */ }
+                    setSatSearching(false);
+                  }} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={satAddress}
+                      onChange={(e) => setSatAddress(e.target.value)}
+                      placeholder="123 Main St, City, State"
+                      className="flex-1 px-3 py-1.5 rounded-lg text-xs border border-sage/20 dark:border-sage-dark/20 bg-transparent text-forest-deep dark:text-cream focus:outline-none focus:ring-1 focus:ring-terra/40"
+                      autoFocus
+                    />
+                    <button
+                      type="submit"
+                      disabled={satSearching}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-terra text-cream hover:brightness-110 transition-all flex items-center gap-1"
+                    >
+                      {satSearching ? '...' : <><Search className="w-3 h-3" /> Go</>}
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* Edit Shape — for polygon-editable yard elements */}
           {(() => {
