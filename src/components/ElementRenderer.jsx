@@ -34,7 +34,76 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
       )}
 
       {/* Element shape */}
-      {element.circular ? (
+      {element.id.startsWith('tree-') ? (
+        // Tree canopy — layered circles for natural look
+        <g>
+          {/* Shadow on ground */}
+          <ellipse cx={px + w / 2 + 2} cy={py + h / 2 + 2} rx={w / 2} ry={h / 2}
+            fill="#000" opacity={0.08} />
+          {element.id === 'tree-evergreen' ? (
+            // Evergreen — darker, denser, concentric rings
+            <>
+              <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+                fill="#2A5A2A" stroke="#1A4A1A" strokeWidth={1} opacity={0.85} />
+              <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.35} ry={h * 0.35}
+                fill="#1A4A1A" opacity={0.4} />
+              <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.18} ry={h * 0.18}
+                fill="#0A3A0A" opacity={0.3} />
+              {/* Texture */}
+              {Array.from({ length: 12 }).map((_, i) => {
+                const angle = (i / 12) * Math.PI * 2;
+                const r = w * 0.3;
+                return <circle key={i} cx={px + w/2 + Math.cos(angle) * r} cy={py + h/2 + Math.sin(angle) * r}
+                  r={w * 0.06} fill="#1A4A1A" opacity={0.3} />;
+              })}
+            </>
+          ) : (
+            // Deciduous — leafy, varied clusters
+            <>
+              <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+                fill={element.color} stroke={element.borderColor} strokeWidth={1} opacity={0.8} />
+              {/* Leaf clusters */}
+              {Array.from({ length: Math.max(5, Math.floor(w * h / 60)) }).map((_, i) => {
+                const angle = (i * 2.39996) ; // golden angle for even distribution
+                const dist = (0.2 + (i % 5) * 0.14) * w / 2;
+                const cx = px + w/2 + Math.cos(angle) * dist;
+                const cy = py + h/2 + Math.sin(angle) * dist;
+                const r = w * 0.06 + (i % 3) * w * 0.02;
+                const shade = i % 3 === 0 ? element.color : i % 3 === 1 ? element.borderColor : '#5AAA3A';
+                return <circle key={i} cx={cx} cy={cy} r={r} fill={shade} opacity={0.5} />;
+              })}
+              {/* Trunk hint at center */}
+              <circle cx={px + w / 2} cy={py + h / 2} r={w * 0.06}
+                fill="#6B4B2A" opacity={0.6} />
+              {element.id === 'tree-ornamental' && (
+                // Flower dots for ornamental trees
+                <>
+                  {Array.from({ length: 8 }).map((_, i) => {
+                    const angle = i * 0.785;
+                    const dist = w * 0.25 + (i % 3) * w * 0.08;
+                    return <circle key={`fl-${i}`}
+                      cx={px + w/2 + Math.cos(angle) * dist}
+                      cy={py + h/2 + Math.sin(angle) * dist}
+                      r={w * 0.03} fill="#E8A0B0" opacity={0.7} />;
+                  })}
+                </>
+              )}
+            </>
+          )}
+        </g>
+      ) : element.id === 'curved-bed' ? (
+        // Curved planting bed — green with mulch texture
+        <g>
+          <rect x={px} y={py} width={w} height={h} fill="#4A6A2A" stroke="#3A5A1A" strokeWidth={1.5} rx={3} opacity={0.8} />
+          {/* Mulch/plant texture */}
+          {Array.from({ length: Math.max(4, Math.floor(w * h / 25)) }).map((_, i) => {
+            const cx = px + 2 + ((i * 17 + i * i * 5) % Math.max(1, w - 4));
+            const cy = py + 2 + ((i * 11 + i * i * 3) % Math.max(1, h - 4));
+            const shade = i % 4 === 0 ? '#6B9B4A' : i % 4 === 1 ? '#5A8A3A' : i % 4 === 2 ? '#3A5A1A' : '#7AAA5A';
+            return <circle key={i} cx={cx} cy={cy} r={1 + (i % 3) * 0.5} fill={shade} opacity={0.6} />;
+          })}
+        </g>
+      ) : element.circular ? (
         <ellipse
           cx={px + w / 2}
           cy={py + h / 2}
@@ -632,6 +701,42 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             return <circle key={i} cx={cx} cy={cy} r={1.5} fill={element.borderColor} opacity={0.4} />;
           })}
         </g>
+      ) : element.id === 'awning-metal' ? (
+        // Flat metal canopy — clean MCM style
+        <g>
+          {/* Shadow underneath */}
+          <rect x={px + 1.5} y={py + 1.5} width={w} height={h} fill="#000" opacity={0.12} rx={0.5} />
+          {/* Main canopy surface — dark metal */}
+          <rect x={px} y={py} width={w} height={h} fill="#4A4A4A" stroke="#2A2A2A" strokeWidth={1} rx={0.5} opacity={0.9} />
+          {/* Subtle surface sheen */}
+          <rect x={px + 1} y={py + 1} width={w - 2} height={h * 0.35} fill="#666" opacity={0.2} rx={0.5} />
+          {/* Front drip edge — slightly lighter */}
+          <rect x={px} y={py + h - 1.5} width={w} height={1.5} fill="#555" opacity={0.6} rx={0.3} />
+          {/* Slim support posts — two thin lines */}
+          <rect x={px + 3} y={py + 2} width={1} height={h - 4} fill="#333" opacity={0.7} rx={0.3} />
+          <rect x={px + w - 4} y={py + 2} width={1} height={h - 4} fill="#333" opacity={0.7} rx={0.3} />
+        </g>
+      ) : element.id === 'awning-beam' ? (
+        // Post-and-beam overhang — exposed wood MCM style
+        <g>
+          {/* Shadow underneath */}
+          <rect x={px + 2} y={py + 2} width={w} height={h} fill="#000" opacity={0.1} rx={1} />
+          {/* Main beam surface */}
+          <rect x={px} y={py} width={w} height={h} fill="#9A7A5A" stroke="#6B4B2A" strokeWidth={1} rx={1} opacity={0.9} />
+          {/* Wood grain lines */}
+          {Array.from({ length: Math.max(2, Math.floor(w / 5)) }).map((_, i) => (
+            <line key={`grain-${i}`} x1={px + 2.5 + i * 5} y1={py + 1} x2={px + 2.5 + i * 5} y2={py + h - 1}
+              stroke="#6B4B2A" strokeWidth={0.3} opacity={0.3} />
+          ))}
+          {/* Cross beams */}
+          <rect x={px} y={py + h * 0.3} width={w} height={2} fill="#7A5A3A" opacity={0.5} rx={0.5} />
+          <rect x={px} y={py + h * 0.65} width={w} height={2} fill="#7A5A3A" opacity={0.5} rx={0.5} />
+          {/* Support posts at ends */}
+          <rect x={px + 1} y={py + 1} width={2.5} height={h - 2} fill="#6B4B2A" opacity={0.7} rx={0.5} />
+          <rect x={px + w - 3.5} y={py + 1} width={2.5} height={h - 2} fill="#6B4B2A" opacity={0.7} rx={0.5} />
+          {/* Top highlight */}
+          <rect x={px + 1} y={py} width={w - 2} height={1.5} fill="#B89A7A" opacity={0.4} rx={0.5} />
+        </g>
       ) : element.id === 'pergola' ? (
         // Pergola — posts, beams, and slatted roof
         <g>
@@ -657,6 +762,21 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
               <rect x={cx + 0.3} y={cy + 0.3} width={1.2} height={1.2} fill="#8B6B4A" opacity={0.5} rx={0.2} />
             </g>
           ))}
+          {/* Climbing vine/greenery draped over the slats */}
+          {(() => {
+            const vines = [];
+            const count = Math.max(3, Math.floor((w * h) / 30));
+            for (let i = 0; i < count; i++) {
+              const vx = px + 2 + ((i * 19 + i * i * 5) % Math.max(1, w - 4));
+              const vy = py + 1 + ((i * 11 + i * i * 3) % Math.max(1, h - 2));
+              const r = 1.2 + (i % 4) * 0.6;
+              const shade = i % 5 === 0 ? '#5A9A3A' : i % 5 === 1 ? '#4A8A2A' : i % 5 === 2 ? '#6BAA4A' : i % 5 === 3 ? '#3A7A1A' : '#7BBB5A';
+              vines.push(
+                <circle key={`vine-${i}`} cx={vx} cy={vy} r={r} fill={shade} opacity={0.6} />
+              );
+            }
+            return vines;
+          })()}
           {/* Outline */}
           <rect x={px} y={py} width={w} height={h} fill="none" stroke="#6B4B2A" strokeWidth={1} rx={1} opacity={0.6} />
         </g>

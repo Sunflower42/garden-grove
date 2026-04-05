@@ -1904,6 +1904,263 @@ export default function YardView() {
               </g>
             )}
 
+            {/* Garden plots */}
+            {state.plots.map((plot) => {
+              const shape = getDisplayShape(plot);
+              const isEditing = state.editingPlotId === plot.id;
+              const isMultiSelected = multiSelectedPlots.has(plot.id);
+              const plantCount = plot.plants.length;
+              const c = centroid(shape);
+              const area = Math.round(polyArea(shape));
+              const points = shapeToPoints(shape);
+
+              return (
+                <g key={plot.id}>
+                  {/* Plot shadow */}
+                  <polygon
+                    points={shape.map(p => `${p.x * SCALE + 2},${p.y * SCALE + 2}`).join(' ')}
+                    fill="#3A2A1A" opacity={0.15}
+                  />
+
+                  {/* Plot soil background */}
+                  <polygon
+                    points={points}
+                    fill="url(#soil)"
+                    stroke={isEditing ? '#C17644' : isMultiSelected ? '#8B6AAE' : '#6B5B4A'}
+                    strokeWidth={isEditing ? 2.5 : isMultiSelected ? 2.5 : 1.5}
+                    strokeLinejoin="round"
+                    style={{ cursor: 'grab' }}
+                    onMouseDown={(e) => handlePlotDragStart(plot, e)}
+                    onClick={(e) => handlePlotClick(plot, e)}
+                  />
+
+                  {/* Plant dots & element previews — mapped from plot OBB space to yard coords */}
+                  {(() => {
+                    if (!shape || shape.length < 3) return null;
+                    // Find the OBB primary axis (longest edge direction)
+                    let maxLen = 0, aDx = 1, aDy = 0;
+                    for (let si = 0; si < shape.length; si++) {
+                      const sj = (si + 1) % shape.length;
+                      const dx = shape[sj].x - shape[si].x;
+                      const dy = shape[sj].y - shape[si].y;
+                      const len = Math.sqrt(dx * dx + dy * dy);
+                      if (len > maxLen) { maxLen = len; aDx = dx / len; aDy = dy / len; }
+                    }
+                    // Normalize axis so content isn't mirrored — ensure primary axis
+                    // points rightward (or downward if vertical)
+                    if (aDx < 0 || (aDx === 0 && aDy < 0)) {
+                      aDx = -aDx;
+                      aDy = -aDy;
+                    }
+                    const pDx = -aDy, pDy = aDx;
+                    // Ensure perpendicular points downward (or rightward)
+                    // so Y-axis mapping stays consistent with planner view
+                    let minA = Infinity, minP = Infinity;
+                    for (const pt of shape) {
+                      minA = Math.min(minA, pt.x * aDx + pt.y * aDy);
+                      minP = Math.min(minP, pt.x * pDx + pt.y * pDy);
+                    }
+                    const obbW = plot.widthFt, obbH = plot.heightFt;
+
+                    // Map a grid cell position to yard coordinates
+                    const cellToYard = (cellX, cellY) => {
+                      const fracX = obbW > 0 ? (cellX / (obbW * 2)) : 0;
+                      const fracY = obbH > 0 ? (cellY / (obbH * 2)) : 0;
+                      const localA = fracX * obbW;
+                      const localP = fracY * obbH;
+                      return {
+                        x: (aDx * (minA + localA) + pDx * (minP + localP)) * SCALE,
+                        y: (aDy * (minA + localA) + pDy * (minP + localP)) * SCALE,
+                      };
+                    };
+
+                    return (
+                      <>
+                        {/* Plant dots */}
+                        {plot.plants.slice(0, 30).map((p, pi) => {
+                          const pos = cellToYard(p.x, p.y);
+                          return (
+                            <circle key={`p-${pi}`} cx={pos.x} cy={pos.y} r={2} fill="#4A7A3A" opacity={0.5}
+                              style={{ pointerEvents: 'none' }} />
+                          );
+                        })}
+                        {/* Elements — rendered as rotated shapes matching the plot angle */}
+                        {plot.elements.map((el, ei) => {
+                          const elemData = getElementById(el.elementId);
+                          if (!elemData) return null;
+                          // Get the four corners of the element in grid cells, map each to yard
+                          const tl = cellToYard(el.x, el.y);
+                          const tr = cellToYard(el.x + (el.width || 2), el.y);
+                          const br = cellToYard(el.x + (el.width || 2), el.y + (el.height || 2));
+                          const bl = cellToYard(el.x, el.y + (el.height || 2));
+                          const pts = `${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`;
+                          return (
+                            <polygon key={`e-${ei}`}
+                              points={pts}
+                              fill={elemData.color} stroke={elemData.borderColor}
+                              strokeWidth={1} opacity={0.7} strokeLinejoin="round"
+                              style={{ pointerEvents: 'none' }}
+                            />
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+
+                  {/* Plot label */}
+                  <text x={c.x * SCALE} y={c.y * SCALE - 4} textAnchor="middle"
+                    fontSize={Math.min(9, plot.widthFt * SCALE / 8)} fontFamily="Cormorant Garamond, serif" fontWeight={600}
+                    fill="#F5E6CC" style={{ pointerEvents: 'none' }}>
+                    {plot.icon} {plot.name}
+                  </text>
+                  <text x={c.x * SCALE} y={c.y * SCALE + 7} textAnchor="middle"
+                    fontSize={6} fontFamily="Outfit" fill="#D4C4A8" opacity={0.8}
+                    style={{ pointerEvents: 'none' }}>
+                    {area} sq ft · {plantCount} plant{plantCount !== 1 ? 's' : ''}
+                  </text>
+
+                  {/* Editing controls */}
+                  {isEditing && (
+                    <>
+                      {/* Vertex handles — large invisible grab target + visible dot */}
+                      {shape.map((pt, i) => (
+                        <g key={`v-${i}`}>
+                          <circle
+                            cx={pt.x * SCALE} cy={pt.y * SCALE}
+                            r={12 / zoom}
+                            fill="transparent"
+                            style={{ cursor: 'grab', pointerEvents: 'all' }}
+                          />
+                          <circle
+                            cx={pt.x * SCALE} cy={pt.y * SCALE}
+                            r={6 / zoom}
+                            fill="#C17644" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                            style={{ pointerEvents: 'none' }}
+                          />
+                        </g>
+                      ))}
+
+                      {/* Rotate handle — above top of plot */}
+                      {(() => {
+                        const minY = Math.min(...shape.map(p => p.y));
+                        const handleY = minY * SCALE - 24 / zoom;
+                        const handleX = c.x * SCALE;
+
+                        // Determine which plots to rotate together
+                        let rotIds = [plot.id];
+                        if (plot.quadrantGroupId) {
+                          rotIds = state.plots.filter(p => p.quadrantGroupId === plot.quadrantGroupId).map(p => p.id);
+                        } else if (/quadrant/i.test(plot.name)) {
+                          const siblings = state.plots.filter(p => /quadrant/i.test(p.name));
+                          if (siblings.length >= 4) rotIds = siblings.map(p => p.id);
+                        }
+
+                        // For group rotation, use group centroid
+                        let rcx = c.x * SCALE, rcy = c.y * SCALE;
+                        if (rotIds.length > 1) {
+                          const allPts = rotIds.map(id => state.plots.find(p => p.id === id)).filter(Boolean).flatMap(p => getPlotShape(p));
+                          rcx = (allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length) * SCALE;
+                          rcy = (allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length) * SCALE;
+                        }
+
+                        return (
+                          <g style={{ pointerEvents: 'all' }}>
+                            {/* Line from centroid to handle */}
+                            <line x1={handleX} y1={minY * SCALE} x2={handleX} y2={handleY}
+                              stroke="#8B6AAE" strokeWidth={1.5 / zoom} opacity={0.5}
+                              style={{ pointerEvents: 'none' }} />
+                            {/* Rotate handle circle */}
+                            <circle
+                              cx={handleX} cy={handleY}
+                              r={7 / zoom}
+                              fill="#8B6AAE" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                              style={{ cursor: 'crosshair' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const svg = toSVG(e.clientX, e.clientY);
+                                const startAngle = Math.atan2(svg.y - rcy, svg.x - rcx) * 180 / Math.PI;
+                                setRotatingPlot({ ids: rotIds, cx: rcx, cy: rcy, startAngle, currentAngle: 0 });
+                              }}
+                            />
+                            {/* Rotate icon hint */}
+                            <text
+                              x={handleX} y={handleY}
+                              textAnchor="middle" dominantBaseline="central"
+                              fontSize={8 / zoom} fill="#FDF6E9"
+                              style={{ pointerEvents: 'none', fontWeight: 700 }}
+                            >↻</text>
+                          </g>
+                        );
+                      })()}
+
+                      {/* Edge midpoint hints + edge length labels */}
+                      {shape.map((pt, i) => {
+                        const j = (i + 1) % shape.length;
+                        const mx = (pt.x + shape[j].x) / 2;
+                        const my = (pt.y + shape[j].y) / 2;
+                        const dx = shape[j].x - pt.x;
+                        const dy = shape[j].y - pt.y;
+                        const len = Math.round(Math.sqrt(dx * dx + dy * dy));
+                        // Angle in degrees for rotating the label to follow the edge
+                        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                        // Keep text readable (not upside down)
+                        if (angle > 90 || angle < -90) angle += 180;
+                        // Offset the label slightly away from the edge (perpendicular)
+                        const perpX = -dy / Math.sqrt(dx * dx + dy * dy);
+                        const perpY = dx / Math.sqrt(dx * dx + dy * dy);
+                        const offsetDist = 8 / zoom;
+                        const lx = mx * SCALE + perpX * offsetDist;
+                        const ly = my * SCALE + perpY * offsetDist;
+                        return (
+                          <g key={`m-${i}`} style={{ pointerEvents: 'none' }}>
+                            <circle
+                              cx={mx * SCALE} cy={my * SCALE}
+                              r={4 / zoom}
+                              fill="#C17644" fillOpacity={0.4} stroke="#C17644" strokeWidth={0.8 / zoom}
+                            />
+                            {/* Edge length label */}
+                            <g transform={`translate(${lx},${ly}) rotate(${angle})`}>
+                              <rect
+                                x={-14 / zoom} y={-6 / zoom}
+                                width={28 / zoom} height={12 / zoom}
+                                rx={3 / zoom}
+                                fill="#3A2A1A" fillOpacity={0.7}
+                              />
+                              <text
+                                x={0} y={3.5 / zoom}
+                                textAnchor="middle"
+                                fontSize={8 / zoom}
+                                fontFamily="Outfit"
+                                fontWeight={600}
+                                fill="#FDF6E9"
+                              >
+                                {len}'
+                              </text>
+                            </g>
+                          </g>
+                        );
+                      })}
+
+                      {/* Open Plot button */}
+                      <g
+                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_ACTIVE_PLOT', payload: plot.id }); }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <rect x={c.x * SCALE - 28} y={c.y * SCALE + 12} width={56} height={14} rx={7}
+                          fill="#C17644" opacity={0.9} />
+                        <text x={c.x * SCALE} y={c.y * SCALE + 21.5} textAnchor="middle"
+                          fontSize={6.5} fontFamily="Outfit" fontWeight={600} fill="white">
+                          Open Plot
+                        </text>
+                      </g>
+                    </>
+                  )}
+                </g>
+              );
+            })}
+
+
             {/* Yard elements */}
             {state.yardElements.map(el => {
               const elemData = getElementById(el.elementId);
@@ -2304,265 +2561,6 @@ export default function YardView() {
                 </g>
               );
             })()}
-
-            {/* Garden plots */}
-            {state.plots.map((plot) => {
-              const shape = getDisplayShape(plot);
-              const isEditing = state.editingPlotId === plot.id;
-              const isMultiSelected = multiSelectedPlots.has(plot.id);
-              const plantCount = plot.plants.length;
-              const c = centroid(shape);
-              const area = Math.round(polyArea(shape));
-              const points = shapeToPoints(shape);
-
-              return (
-                <g key={plot.id}>
-                  {/* Plot shadow */}
-                  <polygon
-                    points={shape.map(p => `${p.x * SCALE + 2},${p.y * SCALE + 2}`).join(' ')}
-                    fill="#3A2A1A" opacity={0.15}
-                  />
-
-                  {/* Plot soil background */}
-                  <polygon
-                    points={points}
-                    fill="url(#soil)"
-                    stroke={isEditing ? '#C17644' : isMultiSelected ? '#8B6AAE' : '#6B5B4A'}
-                    strokeWidth={isEditing ? 2.5 : isMultiSelected ? 2.5 : 1.5}
-                    strokeLinejoin="round"
-                    style={{ cursor: 'grab' }}
-                    onMouseDown={(e) => handlePlotDragStart(plot, e)}
-                    onClick={(e) => handlePlotClick(plot, e)}
-                  />
-
-                  {/* Plant dots & element previews — mapped from plot OBB space to yard coords */}
-                  {(() => {
-                    if (!shape || shape.length < 3) return null;
-                    // Find the OBB primary axis (longest edge direction)
-                    let maxLen = 0, aDx = 1, aDy = 0;
-                    for (let si = 0; si < shape.length; si++) {
-                      const sj = (si + 1) % shape.length;
-                      const dx = shape[sj].x - shape[si].x;
-                      const dy = shape[sj].y - shape[si].y;
-                      const len = Math.sqrt(dx * dx + dy * dy);
-                      if (len > maxLen) { maxLen = len; aDx = dx / len; aDy = dy / len; }
-                    }
-                    // Normalize axis so content isn't mirrored — ensure primary axis
-                    // points rightward (or downward if vertical)
-                    if (aDx < 0 || (aDx === 0 && aDy < 0)) {
-                      aDx = -aDx;
-                      aDy = -aDy;
-                    }
-                    const pDx = -aDy, pDy = aDx;
-                    // Ensure perpendicular points downward (or rightward)
-                    // so Y-axis mapping stays consistent with planner view
-                    let minA = Infinity, minP = Infinity;
-                    for (const pt of shape) {
-                      minA = Math.min(minA, pt.x * aDx + pt.y * aDy);
-                      minP = Math.min(minP, pt.x * pDx + pt.y * pDy);
-                    }
-                    const obbW = plot.widthFt, obbH = plot.heightFt;
-
-                    // Map a grid cell position to yard coordinates
-                    const cellToYard = (cellX, cellY) => {
-                      const fracX = obbW > 0 ? (cellX / (obbW * 2)) : 0;
-                      const fracY = obbH > 0 ? (cellY / (obbH * 2)) : 0;
-                      const localA = fracX * obbW;
-                      const localP = fracY * obbH;
-                      return {
-                        x: (aDx * (minA + localA) + pDx * (minP + localP)) * SCALE,
-                        y: (aDy * (minA + localA) + pDy * (minP + localP)) * SCALE,
-                      };
-                    };
-
-                    return (
-                      <>
-                        {/* Plant dots */}
-                        {plot.plants.slice(0, 30).map((p, pi) => {
-                          const pos = cellToYard(p.x, p.y);
-                          return (
-                            <circle key={`p-${pi}`} cx={pos.x} cy={pos.y} r={2} fill="#4A7A3A" opacity={0.5}
-                              style={{ pointerEvents: 'none' }} />
-                          );
-                        })}
-                        {/* Elements — rendered as rotated shapes matching the plot angle */}
-                        {plot.elements.map((el, ei) => {
-                          const elemData = getElementById(el.elementId);
-                          if (!elemData) return null;
-                          // Get the four corners of the element in grid cells, map each to yard
-                          const tl = cellToYard(el.x, el.y);
-                          const tr = cellToYard(el.x + (el.width || 2), el.y);
-                          const br = cellToYard(el.x + (el.width || 2), el.y + (el.height || 2));
-                          const bl = cellToYard(el.x, el.y + (el.height || 2));
-                          const pts = `${tl.x},${tl.y} ${tr.x},${tr.y} ${br.x},${br.y} ${bl.x},${bl.y}`;
-                          return (
-                            <polygon key={`e-${ei}`}
-                              points={pts}
-                              fill={elemData.color} stroke={elemData.borderColor}
-                              strokeWidth={1} opacity={0.7} strokeLinejoin="round"
-                              style={{ pointerEvents: 'none' }}
-                            />
-                          );
-                        })}
-                      </>
-                    );
-                  })()}
-
-                  {/* Plot label */}
-                  <text x={c.x * SCALE} y={c.y * SCALE - 4} textAnchor="middle"
-                    fontSize={Math.min(9, plot.widthFt * SCALE / 8)} fontFamily="Cormorant Garamond, serif" fontWeight={600}
-                    fill="#F5E6CC" style={{ pointerEvents: 'none' }}>
-                    {plot.icon} {plot.name}
-                  </text>
-                  <text x={c.x * SCALE} y={c.y * SCALE + 7} textAnchor="middle"
-                    fontSize={6} fontFamily="Outfit" fill="#D4C4A8" opacity={0.8}
-                    style={{ pointerEvents: 'none' }}>
-                    {area} sq ft · {plantCount} plant{plantCount !== 1 ? 's' : ''}
-                  </text>
-
-                  {/* Editing controls */}
-                  {isEditing && (
-                    <>
-                      {/* Vertex handles — large invisible grab target + visible dot */}
-                      {shape.map((pt, i) => (
-                        <g key={`v-${i}`}>
-                          <circle
-                            cx={pt.x * SCALE} cy={pt.y * SCALE}
-                            r={12 / zoom}
-                            fill="transparent"
-                            style={{ cursor: 'grab', pointerEvents: 'all' }}
-                          />
-                          <circle
-                            cx={pt.x * SCALE} cy={pt.y * SCALE}
-                            r={6 / zoom}
-                            fill="#C17644" stroke="#FDF6E9" strokeWidth={2 / zoom}
-                            style={{ pointerEvents: 'none' }}
-                          />
-                        </g>
-                      ))}
-
-                      {/* Rotate handle — above top of plot */}
-                      {(() => {
-                        const minY = Math.min(...shape.map(p => p.y));
-                        const handleY = minY * SCALE - 24 / zoom;
-                        const handleX = c.x * SCALE;
-
-                        // Determine which plots to rotate together
-                        let rotIds = [plot.id];
-                        if (plot.quadrantGroupId) {
-                          rotIds = state.plots.filter(p => p.quadrantGroupId === plot.quadrantGroupId).map(p => p.id);
-                        } else if (/quadrant/i.test(plot.name)) {
-                          const siblings = state.plots.filter(p => /quadrant/i.test(p.name));
-                          if (siblings.length >= 4) rotIds = siblings.map(p => p.id);
-                        }
-
-                        // For group rotation, use group centroid
-                        let rcx = c.x * SCALE, rcy = c.y * SCALE;
-                        if (rotIds.length > 1) {
-                          const allPts = rotIds.map(id => state.plots.find(p => p.id === id)).filter(Boolean).flatMap(p => getPlotShape(p));
-                          rcx = (allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length) * SCALE;
-                          rcy = (allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length) * SCALE;
-                        }
-
-                        return (
-                          <g style={{ pointerEvents: 'all' }}>
-                            {/* Line from centroid to handle */}
-                            <line x1={handleX} y1={minY * SCALE} x2={handleX} y2={handleY}
-                              stroke="#8B6AAE" strokeWidth={1.5 / zoom} opacity={0.5}
-                              style={{ pointerEvents: 'none' }} />
-                            {/* Rotate handle circle */}
-                            <circle
-                              cx={handleX} cy={handleY}
-                              r={7 / zoom}
-                              fill="#8B6AAE" stroke="#FDF6E9" strokeWidth={2 / zoom}
-                              style={{ cursor: 'crosshair' }}
-                              onMouseDown={(e) => {
-                                e.stopPropagation();
-                                e.preventDefault();
-                                const svg = toSVG(e.clientX, e.clientY);
-                                const startAngle = Math.atan2(svg.y - rcy, svg.x - rcx) * 180 / Math.PI;
-                                setRotatingPlot({ ids: rotIds, cx: rcx, cy: rcy, startAngle, currentAngle: 0 });
-                              }}
-                            />
-                            {/* Rotate icon hint */}
-                            <text
-                              x={handleX} y={handleY}
-                              textAnchor="middle" dominantBaseline="central"
-                              fontSize={8 / zoom} fill="#FDF6E9"
-                              style={{ pointerEvents: 'none', fontWeight: 700 }}
-                            >↻</text>
-                          </g>
-                        );
-                      })()}
-
-                      {/* Edge midpoint hints + edge length labels */}
-                      {shape.map((pt, i) => {
-                        const j = (i + 1) % shape.length;
-                        const mx = (pt.x + shape[j].x) / 2;
-                        const my = (pt.y + shape[j].y) / 2;
-                        const dx = shape[j].x - pt.x;
-                        const dy = shape[j].y - pt.y;
-                        const len = Math.round(Math.sqrt(dx * dx + dy * dy));
-                        // Angle in degrees for rotating the label to follow the edge
-                        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                        // Keep text readable (not upside down)
-                        if (angle > 90 || angle < -90) angle += 180;
-                        // Offset the label slightly away from the edge (perpendicular)
-                        const perpX = -dy / Math.sqrt(dx * dx + dy * dy);
-                        const perpY = dx / Math.sqrt(dx * dx + dy * dy);
-                        const offsetDist = 8 / zoom;
-                        const lx = mx * SCALE + perpX * offsetDist;
-                        const ly = my * SCALE + perpY * offsetDist;
-                        return (
-                          <g key={`m-${i}`} style={{ pointerEvents: 'none' }}>
-                            <circle
-                              cx={mx * SCALE} cy={my * SCALE}
-                              r={4 / zoom}
-                              fill="#C17644" fillOpacity={0.4} stroke="#C17644" strokeWidth={0.8 / zoom}
-                            />
-                            {/* Edge length label */}
-                            <g transform={`translate(${lx},${ly}) rotate(${angle})`}>
-                              <rect
-                                x={-14 / zoom} y={-6 / zoom}
-                                width={28 / zoom} height={12 / zoom}
-                                rx={3 / zoom}
-                                fill="#3A2A1A" fillOpacity={0.7}
-                              />
-                              <text
-                                x={0} y={3.5 / zoom}
-                                textAnchor="middle"
-                                fontSize={8 / zoom}
-                                fontFamily="Outfit"
-                                fontWeight={600}
-                                fill="#FDF6E9"
-                              >
-                                {len}'
-                              </text>
-                            </g>
-                          </g>
-                        );
-                      })}
-
-                      {/* Open Plot button */}
-                      <g
-                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_ACTIVE_PLOT', payload: plot.id }); }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <rect x={c.x * SCALE - 28} y={c.y * SCALE + 12} width={56} height={14} rx={7}
-                          fill="#C17644" opacity={0.9} />
-                        <text x={c.x * SCALE} y={c.y * SCALE + 21.5} textAnchor="middle"
-                          fontSize={6.5} fontFamily="Outfit" fontWeight={600} fill="white">
-                          Open Plot
-                        </text>
-                      </g>
-                    </>
-                  )}
-                </g>
-              );
-            })}
-
-            {/* Re-render yard elements that should appear above plots — use portal-like approach */}
-            {/* The main yardElements.map above renders all elements with full UI; SVG order determines visual stacking */}
 
           </g>
           </>}
