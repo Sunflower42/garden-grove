@@ -13,6 +13,7 @@ import './index.css';
 class ErrorBoundary extends Component {
   state = { error: null };
   static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error('ErrorBoundary caught:', error, info); }
   render() {
     if (this.state.error) {
       return (
@@ -31,8 +32,8 @@ class ErrorBoundary extends Component {
           >
             Just Reload
           </button>
-          <pre style={{ marginTop: 20, padding: 16, background: '#f5f5f5', borderRadius: 8, fontSize: 12, overflow: 'auto', color: '#c00' }}>
-            {this.state.error?.message}
+          <pre style={{ marginTop: 20, padding: 16, background: '#f5f5f5', borderRadius: 8, fontSize: 12, overflow: 'auto', color: '#c00', whiteSpace: 'pre-wrap' }}>
+            {this.state.error?.message}{'\n'}{this.state.error?.stack}
           </pre>
         </div>
       );

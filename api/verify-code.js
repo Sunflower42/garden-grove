@@ -64,23 +64,17 @@ export default async function handler(req, res) {
     });
 
     if (createError) {
-      if (createError.message.includes('already been registered')) {
-        // User exists — update password in case AUTH_SECRET changed
-        const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        const existing = (listData?.users || []).find(u => u.email === email);
-        if (existing) {
-          await supabaseAdmin.auth.admin.updateUser(existing.id, { password });
-        }
-      } else {
+      if (!createError.message.includes('already been registered')) {
         console.error('Create user error:', createError.message);
         return res.status(500).json({ error: 'Failed to create account: ' + createError.message });
       }
+      // User already exists — that's fine, just sign in with existing credentials
     }
 
     // Return credentials for client-side sign-in
     return res.status(200).json({ email, password });
   } catch (err) {
-    console.error('verify-code error:', err.message);
-    return res.status(500).json({ error: 'Something went wrong.' });
+    console.error('verify-code error:', err.message, err.stack);
+    return res.status(500).json({ error: 'Verify error: ' + err.message });
   }
 }
