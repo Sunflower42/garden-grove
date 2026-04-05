@@ -234,7 +234,7 @@ export default function YardView() {
           e.preventDefault();
           e.stopPropagation();
           const svg = toSVG(e.clientX, e.clientY);
-          const newPt = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+          const newPt = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
           dispatch({ type: 'ADD_HOUSE_VERTEX', payload: { index: j, point: newPt } });
           setDraggingHouseVertex(j);
           return;
@@ -275,7 +275,7 @@ export default function YardView() {
             e.preventDefault();
             e.stopPropagation();
             const svg = toSVG(e.clientX, e.clientY);
-            const newPt = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+            const newPt = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
             dispatch({ type: 'ADD_YARD_ELEMENT_VERTEX', payload: { id: el.id, index: j, point: newPt } });
             setDraggingElementVertex({ id: el.id, vertexIndex: j });
             return;
@@ -353,7 +353,7 @@ export default function YardView() {
     if (draggingHouseVertex !== null && state.housePolygon) {
       const svg = toSVG(e.clientX, e.clientY);
       const newPoly = [...state.housePolygon];
-      newPoly[draggingHouseVertex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+      newPoly[draggingHouseVertex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
       dispatch({ type: 'UPDATE_HOUSE_POLYGON', payload: newPoly });
       return;
     }
@@ -363,7 +363,7 @@ export default function YardView() {
       const el = state.yardElements.find(y => y.id === draggingElementVertex.id);
       if (el?.polygon) {
         const newPoly = [...el.polygon];
-        newPoly[draggingElementVertex.vertexIndex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+        newPoly[draggingElementVertex.vertexIndex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
         dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
       }
       return;
@@ -390,19 +390,58 @@ export default function YardView() {
     // Yard element dragging
     if (draggingYardElement) {
       const svg = toSVG(e.clientX, e.clientY);
-      const newX = Math.round(toFt(svg.x) - draggingYardElement.offsetX);
-      const newY = Math.round(toFt(svg.y) - draggingYardElement.offsetY);
+      const newX = Math.round((toFt(svg.x) - draggingYardElement.offsetX) * 2) / 2;
+      const newY = Math.round((toFt(svg.y) - draggingYardElement.offsetY) * 2) / 2;
       dispatch({ type: 'MOVE_YARD_ELEMENT', payload: { id: draggingYardElement.id, x: newX, y: newY } });
       return;
     }
-    // Yard element resizing
+    // Yard element resizing — supports individual edges + polygon scaling
     if (resizingYardElement) {
       const svg = toSVG(e.clientX, e.clientY);
       const el = state.yardElements.find(y => y.id === resizingYardElement.id);
       if (el) {
-        const newW = Math.max(1, Math.round(toFt(svg.x) - el.x));
-        const newH = Math.max(1, Math.round(toFt(svg.y) - el.y));
-        dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, width: newW, height: newH } });
+        const edge = resizingYardElement.edge;
+        const snap = (v) => Math.round(v * 2) / 2;
+        const ftX = snap(toFt(svg.x));
+        const ftY = snap(toFt(svg.y));
+
+        // For polygon elements, scale the polygon vertices
+        if (el.polygon && el.polygon.length >= 3) {
+          const pxs = el.polygon.map(p => p.x);
+          const pys = el.polygon.map(p => p.y);
+          const oldMinX = Math.min(...pxs), oldMaxX = Math.max(...pxs);
+          const oldMinY = Math.min(...pys), oldMaxY = Math.max(...pys);
+          let newMinX = oldMinX, newMaxX = oldMaxX, newMinY = oldMinY, newMaxY = oldMaxY;
+          if (edge === 'right' || edge === 'br') newMaxX = Math.max(oldMinX + 0.5, ftX);
+          if (edge === 'bottom' || edge === 'br') newMaxY = Math.max(oldMinY + 0.5, ftY);
+          if (edge === 'left') newMinX = Math.min(ftX, oldMaxX - 0.5);
+          if (edge === 'top') newMinY = Math.min(ftY, oldMaxY - 0.5);
+          const scaleX = (newMaxX - newMinX) / (oldMaxX - oldMinX || 1);
+          const scaleY = (newMaxY - newMinY) / (oldMaxY - oldMinY || 1);
+          const newPoly = el.polygon.map(p => ({
+            x: snap(newMinX + (p.x - oldMinX) * scaleX),
+            y: snap(newMinY + (p.y - oldMinY) * scaleY),
+          }));
+          dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
+        } else {
+          const updates = { id: el.id };
+          if (edge === 'right' || edge === 'br') updates.width = Math.max(0.5, ftX - el.x);
+          if (edge === 'bottom' || edge === 'br') updates.height = Math.max(0.5, ftY - el.y);
+          if (edge === 'left') {
+            const newX = Math.min(ftX, el.x + el.width - 0.5);
+            updates.width = el.x + el.width - newX;
+            updates.x = newX;
+          }
+          if (edge === 'top') {
+            const newY = Math.min(ftY, el.y + el.height - 0.5);
+            updates.height = el.y + el.height - newY;
+            updates.y = newY;
+          }
+          if (updates.x != null || updates.y != null) {
+            dispatch({ type: 'MOVE_YARD_ELEMENT', payload: { id: el.id, x: updates.x ?? el.x, y: updates.y ?? el.y } });
+          }
+          dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, width: updates.width ?? el.width, height: updates.height ?? el.height } });
+        }
       }
       return;
     }
@@ -432,7 +471,7 @@ export default function YardView() {
       const plot = state.plots.find(p => p.id === draggingVertex.plotId);
       if (plot) {
         const shape = [...getPlotShape(plot)];
-        shape[draggingVertex.vertexIndex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+        shape[draggingVertex.vertexIndex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
         dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape } });
       }
       return;
@@ -852,7 +891,7 @@ export default function YardView() {
         const plot = state.plots.find(p => p.id === draggingVertex.plotId);
         if (plot) {
           const shape = [...getPlotShape(plot)];
-          shape[draggingVertex.vertexIndex] = { x: Math.round(toFt(svg.x)), y: Math.round(toFt(svg.y)) };
+          shape[draggingVertex.vertexIndex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
           dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape } });
         }
         return;
@@ -1027,11 +1066,12 @@ export default function YardView() {
           dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape } });
         }
       }
-      // Arrow nudge selected yard element
+      // Arrow nudge selected yard element (Shift = fine 0.25ft, default = 1ft)
       if (selectedYardElement && !state.editingPlotId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
         e.preventDefault();
-        const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
-        const dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+        const step = e.shiftKey ? 0.25 : 1;
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
         const el = state.yardElements.find(y => y.id === selectedYardElement);
         if (el) {
           dispatch({ type: 'MOVE_YARD_ELEMENT', payload: { id: el.id, x: el.x + dx, y: el.y + dy } });
@@ -1864,7 +1904,7 @@ export default function YardView() {
               </g>
             )}
 
-            {/* Yard elements (paths, pots, etc.) */}
+            {/* Yard elements */}
             {state.yardElements.map(el => {
               const elemData = getElementById(el.elementId);
               if (!elemData) return null;
@@ -1956,7 +1996,7 @@ export default function YardView() {
                       {elemData.name}
                     </text>
 
-                    {/* Selection outline */}
+                    {/* Selection outline + resize handles */}
                     {isSelected && !isEditingShape && (
                       <>
                         <polygon points={polyPoints}
@@ -1976,6 +2016,31 @@ export default function YardView() {
                           <text x={pMaxX + 4 / zoom} y={pMinY - 1 / zoom}
                             textAnchor="middle" fontSize={9 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">×</text>
                         </g>
+                        {/* Resize corner — bottom-right of bounding box */}
+                        <rect
+                          x={pMaxX - 10 / zoom} y={pMaxY - 10 / zoom}
+                          width={20 / zoom} height={20 / zoom} rx={3 / zoom}
+                          fill="#C17644" stroke="#FDF6E9" strokeWidth={1.5 / zoom}
+                          style={{ cursor: 'nwse-resize' }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'br' }); }}
+                        />
+                        {/* Edge resize handles */}
+                        <rect x={pMaxX - 3 / zoom} y={pMinY + 8 / zoom} width={10 / zoom} height={pMaxY - pMinY - 16 / zoom}
+                          fill="transparent" style={{ cursor: 'ew-resize' }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'right' }); }}
+                        />
+                        <rect x={pMinX + 8 / zoom} y={pMaxY - 3 / zoom} width={pMaxX - pMinX - 16 / zoom} height={10 / zoom}
+                          fill="transparent" style={{ cursor: 'ns-resize' }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'bottom' }); }}
+                        />
+                        <rect x={pMinX - 7 / zoom} y={pMinY + 8 / zoom} width={10 / zoom} height={pMaxY - pMinY - 16 / zoom}
+                          fill="transparent" style={{ cursor: 'ew-resize' }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'left' }); }}
+                        />
+                        <rect x={pMinX + 8 / zoom} y={pMinY - 7 / zoom} width={pMaxX - pMinX - 16 / zoom} height={10 / zoom}
+                          fill="transparent" style={{ cursor: 'ns-resize' }}
+                          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'top' }); }}
+                        />
                       </>
                     )}
 
@@ -2139,22 +2204,44 @@ export default function YardView() {
                       <rect x={ex - 2} y={ey - 2} width={ew + 4} height={eh + 4}
                         fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="6 3" rx={3}
                         style={{ pointerEvents: 'none' }} />
-                      {/* Resize handle — bottom-right */}
-                      <rect
-                        x={ex + ew - 6 / zoom} y={ey + eh - 6 / zoom}
-                        width={12 / zoom} height={12 / zoom} rx={2 / zoom}
-                        fill="#C17644" stroke="#FDF6E9" strokeWidth={1.5 / zoom}
-                        style={{ cursor: 'nwse-resize' }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                          setResizingYardElement({ id: el.id });
-                        }}
-                      />
+                      {/* Resize handle — bottom-right corner */}
+                      {elemData.resizable && (
+                        <rect
+                          x={ex + ew - 5} y={ey + eh - 5}
+                          width={10} height={10} rx={2}
+                          fill="#C17644" stroke="#FDF6E9" strokeWidth={1.5 / zoom}
+                          style={{ cursor: 'nwse-resize' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation(); e.preventDefault();
+                            setResizingYardElement({ id: el.id, edge: 'br' });
+                          }}
+                        />
+                      )}
+                      {/* Edge grab handles — all 4 edges */}
+                      {elemData.resizable && ew > 20 && eh > 20 && (
+                        <>
+                          <rect x={ex + ew - 2} y={ey + 5} width={8} height={Math.max(4, eh - 10)}
+                            fill="transparent" style={{ cursor: 'ew-resize' }}
+                            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'right' }); }}
+                          />
+                          <rect x={ex + 5} y={ey + eh - 2} width={Math.max(4, ew - 10)} height={8}
+                            fill="transparent" style={{ cursor: 'ns-resize' }}
+                            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'bottom' }); }}
+                          />
+                          <rect x={ex - 6} y={ey + 5} width={8} height={Math.max(4, eh - 10)}
+                            fill="transparent" style={{ cursor: 'ew-resize' }}
+                            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'left' }); }}
+                          />
+                          <rect x={ex + 5} y={ey - 6} width={Math.max(4, ew - 10)} height={8}
+                            fill="transparent" style={{ cursor: 'ns-resize' }}
+                            onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizingYardElement({ id: el.id, edge: 'top' }); }}
+                          />
+                        </>
+                      )}
                       {/* Rotate handle — top-center */}
                       <circle
-                        cx={ecx} cy={ey - 16 / zoom}
-                        r={6 / zoom}
+                        cx={ecx} cy={ey - 14}
+                        r={6}
                         fill="#8B6AAE" stroke="#FDF6E9" strokeWidth={1.5 / zoom}
                         style={{ cursor: 'crosshair' }}
                         onMouseDown={(e) => {
@@ -2166,8 +2253,8 @@ export default function YardView() {
                         }}
                       />
                       {/* Rotate line */}
-                      <line x1={ecx} y1={ey} x2={ecx} y2={ey - 16 / zoom}
-                        stroke="#8B6AAE" strokeWidth={1 / zoom} opacity={0.5}
+                      <line x1={ecx} y1={ey} x2={ecx} y2={ey - 14}
+                        stroke="#8B6AAE" strokeWidth={1} opacity={0.5}
                         style={{ pointerEvents: 'none' }} />
                       {/* Rotation label */}
                       {rot !== 0 && (
@@ -2473,6 +2560,10 @@ export default function YardView() {
                 </g>
               );
             })}
+
+            {/* Re-render yard elements that should appear above plots — use portal-like approach */}
+            {/* The main yardElements.map above renders all elements with full UI; SVG order determines visual stacking */}
+
           </g>
           </>}
         </svg>

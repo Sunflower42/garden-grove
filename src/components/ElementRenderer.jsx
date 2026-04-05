@@ -187,6 +187,92 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             ))
           )}
         </g>
+      ) : element.id === 'paver-dg' ? (
+        // Concrete paver squares in decomposed granite
+        <g>
+          {/* DG base */}
+          <rect x={px} y={py} width={w} height={h} fill="#9A8A6A" stroke="#7A6A52" strokeWidth={1.5} rx={2} opacity={0.85} />
+          {/* DG speckle texture */}
+          {Array.from({ length: Math.max(4, Math.floor(w * h / 20)) }).map((_, i) => (
+            <circle key={`dg-${i}`}
+              cx={px + 2 + ((i * 17 + i * i * 3) % (w - 4))}
+              cy={py + 2 + ((i * 13 + i * i * 7) % (h - 4))}
+              r={0.4 + (i % 3) * 0.2}
+              fill={i % 3 === 0 ? '#6A5A42' : '#B8A88A'}
+              opacity={0.4}
+            />
+          ))}
+          {/* Concrete paver squares — fixed 2ft size */}
+          {(() => {
+            const paverSize = 12; // ~2ft in SVG units (constant size)
+            const gap = 2.5; // DG gap between pavers
+            const step = paverSize + gap;
+            const pavers = [];
+            const startX = px + gap;
+            const startY = py + gap;
+            for (let sy = startY; sy + paverSize <= py + h; sy += step) {
+              for (let sx = startX; sx + paverSize <= px + w; sx += step) {
+                pavers.push(
+                  <g key={`pv-${sx}-${sy}`}>
+                    <rect x={sx} y={sy} width={paverSize} height={paverSize}
+                      fill="#DDD5C5" stroke="#C4B8A4" strokeWidth={0.5} rx={0.5} />
+                    <rect x={sx} y={sy} width={paverSize} height={paverSize}
+                      fill="#C8C0B0" opacity={0.15} rx={0.5} />
+                  </g>
+                );
+              }
+            }
+            return pavers;
+          })()}
+        </g>
+      ) : element.id === 'planter-concrete' || element.id === 'planter-concrete-rect' ? (
+        // Concrete planter — thick walls with greenery inside
+        <g>
+          {/* Outer concrete shell */}
+          <rect x={px} y={py} width={w} height={h} fill="#C4B8A8" stroke="#A89888" strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Inner soil area */}
+          <rect x={px + 2.5} y={py + 2.5} width={Math.max(1, w - 5)} height={Math.max(1, h - 5)}
+            fill="#4A6B3A" stroke="#3A5A2A" strokeWidth={0.5} rx={1} opacity={0.85} />
+          {/* Plant clusters */}
+          {(() => {
+            const innerW = w - 5, innerH = h - 5;
+            const cx = px + w / 2, cy = py + h / 2;
+            const clusters = [];
+            const count = Math.max(3, Math.floor((innerW * innerH) / 40));
+            for (let i = 0; i < count; i++) {
+              const ax = px + 3 + ((i * 17 + i * i * 3) % Math.max(1, innerW - 2));
+              const ay = py + 3 + ((i * 13 + i * i * 7) % Math.max(1, innerH - 2));
+              const r = 1.5 + (i % 3) * 0.8;
+              const shade = i % 4 === 0 ? '#6B9B4A' : i % 4 === 1 ? '#5A8A3A' : i % 4 === 2 ? '#7AAA5A' : '#4A7A2A';
+              clusters.push(
+                <circle key={`pl-${i}`} cx={ax} cy={ay} r={r} fill={shade} opacity={0.8} />
+              );
+            }
+            return clusters;
+          })()}
+          {/* Concrete wall highlights */}
+          <rect x={px} y={py} width={w} height={2.5} fill="#D0C8BA" opacity={0.4} rx={2} />
+          <rect x={px} y={py + h - 2.5} width={w} height={2.5} fill="#B0A898" opacity={0.3} rx={2} />
+        </g>
+      ) : element.id === 'patio-raised' ? (
+        // Raised patio — shadow on two sides to show elevation
+        <g>
+          {/* Shadow / side face (right and bottom edges) */}
+          <polygon
+            points={`${px + w},${py + 4} ${px + w + 3},${py + 7} ${px + w + 3},${py + h + 3} ${px + 3},${py + h + 3} ${px},${py + h} ${px + w},${py + h}`}
+            fill="#6A5E4E" opacity={0.5}
+          />
+          {/* Main slab surface */}
+          <rect x={px} y={py} width={w} height={h} fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={2} opacity={0.9} />
+          {/* Broom finish texture */}
+          {Array.from({ length: Math.max(1, Math.floor(w / 6)) }).map((_, i) => (
+            <line key={i} x1={px + 3 + i * 6} y1={py + 1} x2={px + 3 + i * 6} y2={py + h - 1}
+              stroke={element.borderColor} strokeWidth={0.3} opacity={0.25} />
+          ))}
+          {/* Top highlight edge */}
+          <line x1={px + 1} y1={py + 1} x2={px + w - 1} y2={py + 1}
+            stroke="#DDD5C8" strokeWidth={1} opacity={0.4} />
+        </g>
       ) : element.id === 'patio-concrete' ? (
         // Concrete patio — subtle broom finish lines
         <g>
@@ -545,6 +631,34 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected 
             const cy = py + h * (1 - Math.sin(t * Math.PI)) * 0.85;
             return <circle key={i} cx={cx} cy={cy} r={1.5} fill={element.borderColor} opacity={0.4} />;
           })}
+        </g>
+      ) : element.id === 'pergola' ? (
+        // Pergola — posts, beams, and slatted roof
+        <g>
+          {/* Shadow underneath */}
+          <rect x={px + 1} y={py + 1} width={w} height={h} fill="#000" opacity={0.08} rx={1} />
+          {/* Floor area — subtle ground */}
+          <rect x={px} y={py} width={w} height={h} fill="#D4C8B0" stroke="#A89070" strokeWidth={0.5} rx={1} opacity={0.3} />
+          {/* Roof slats running horizontally */}
+          {Array.from({ length: Math.max(2, Math.floor(h / 5)) }).map((_, i) => {
+            const sy = py + 2 + i * ((h - 4) / Math.max(1, Math.floor(h / 5)));
+            return (
+              <rect key={`slat-${i}`} x={px + 1} y={sy} width={w - 2} height={1.8}
+                fill="#8B6B4A" opacity={0.55} rx={0.3} />
+            );
+          })}
+          {/* Main beams running vertically (2 beams) */}
+          <rect x={px + w * 0.25 - 1} y={py} width={2.5} height={h} fill="#7A5A3A" opacity={0.7} rx={0.5} />
+          <rect x={px + w * 0.75 - 1} y={py} width={2.5} height={h} fill="#7A5A3A" opacity={0.7} rx={0.5} />
+          {/* Corner posts */}
+          {[[px + 1.5, py + 1.5], [px + w - 4.5, py + 1.5], [px + 1.5, py + h - 4.5], [px + w - 4.5, py + h - 4.5]].map(([cx, cy], i) => (
+            <g key={`post-${i}`}>
+              <rect x={cx} y={cy} width={3} height={3} fill="#6B4B2A" stroke="#5A3A1A" strokeWidth={0.5} rx={0.5} />
+              <rect x={cx + 0.3} y={cy + 0.3} width={1.2} height={1.2} fill="#8B6B4A" opacity={0.5} rx={0.2} />
+            </g>
+          ))}
+          {/* Outline */}
+          <rect x={px} y={py} width={w} height={h} fill="none" stroke="#6B4B2A" strokeWidth={1} rx={1} opacity={0.6} />
         </g>
       ) : (
         // Default rectangle
