@@ -2,9 +2,75 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store';
 import { PLANTS, PLANT_CATEGORIES, getPlantById, searchPlants } from '../data/plants';
-import { Search, Plus, Minus, X, ChevronDown, Shield, Droplets, Sun, Clock, Users, Ban, Sprout, Flower2, Pencil, Check, Info, LayoutGrid, List, ShoppingCart, ClipboardList } from 'lucide-react';
+import { Search, Plus, Minus, X, ChevronDown, Shield, Droplets, Sun, Clock, Users, Ban, Sprout, Flower2, Pencil, Check, Info, LayoutGrid, List, ShoppingCart, ClipboardList, TreeDeciduous } from 'lucide-react';
 import { lookupVariety, getVarietiesForPlant } from '../data/varieties';
+import { parseLocalDate } from '../data/zones';
 import SeedChecklist from './SeedChecklist';
+
+// Recommend seeds vs starts/plants based on timing relative to frost dates
+function getBuyRecommendation(plant, lastFrostMMDD, firstFrostMMDD) {
+  if (!lastFrostMMDD || !firstFrostMMDD) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const year = today.getFullYear();
+  const lastFrost = parseLocalDate(lastFrostMMDD, year);
+  const firstFrost = parseLocalDate(firstFrostMMDD, year);
+
+  // For fall-planted crops
+  if (plant.plantInFall) {
+    const plantDate = new Date(firstFrost);
+    plantDate.setDate(plantDate.getDate() - 6 * 7);
+    const weeksUntil = (plantDate - today) / (7 * 24 * 60 * 60 * 1000);
+    if (weeksUntil < 2) return { rec: 'start', reason: 'Planting window is very soon — buy a plant start' };
+    return { rec: 'seed', reason: `${Math.round(weeksUntil)} weeks until planting — seeds will work` };
+  }
+
+  // Can this plant be started from seed indoors?
+  if (plant.startIndoorsWeeks) {
+    const startDate = new Date(lastFrost);
+    startDate.setDate(startDate.getDate() - plant.startIndoorsWeeks * 7);
+    const weeksUntilStart = (startDate - today) / (7 * 24 * 60 * 60 * 1000);
+
+    if (weeksUntilStart > 1) {
+      return { rec: 'seed', reason: `Start indoors in ${Math.round(weeksUntilStart)} weeks — seeds are great` };
+    }
+    if (weeksUntilStart > -2) {
+      return { rec: 'either', reason: 'Indoor start window is now — seeds or starts both work' };
+    }
+    return { rec: 'start', reason: 'Too late to start from seed indoors — buy a plant start' };
+  }
+
+  // Direct sow only
+  if (plant.directSowAfterFrost !== undefined) {
+    const sowDate = new Date(lastFrost);
+    sowDate.setDate(sowDate.getDate() + plant.directSowAfterFrost * 7);
+    const weeksUntilSow = (sowDate - today) / (7 * 24 * 60 * 60 * 1000);
+
+    if (weeksUntilSow > 2) {
+      return { rec: 'seed', reason: `Direct sow in ${Math.round(weeksUntilSow)} weeks — buy seeds` };
+    }
+    if (weeksUntilSow > -2) {
+      return { rec: 'seed', reason: 'Direct sow window is now — seeds are the way to go' };
+    }
+    return { rec: 'start', reason: 'Direct sow window passed — buy a plant start instead' };
+  }
+
+  if (plant.directSowWeeksBeforeFrost) {
+    const sowDate = new Date(lastFrost);
+    sowDate.setDate(sowDate.getDate() - plant.directSowWeeksBeforeFrost * 7);
+    const weeksUntilSow = (sowDate - today) / (7 * 24 * 60 * 60 * 1000);
+
+    if (weeksUntilSow > 0) {
+      return { rec: 'seed', reason: `Direct sow in ${Math.round(weeksUntilSow)} weeks — buy seeds` };
+    }
+    if (weeksUntilSow > -3) {
+      return { rec: 'seed', reason: 'Direct sow window is now — seeds work great' };
+    }
+    return { rec: 'start', reason: 'Sow window has passed — buy a plant start' };
+  }
+
+  return { rec: 'either', reason: 'Seeds or starts both work for this plant' };
+}
 
 function DeerMeter({ level }) {
   return (
@@ -30,7 +96,7 @@ function DeerMeter({ level }) {
 }
 
 // Card for an item already in inventory
-function InventoryItemCard({ item, plant, onRemove, onUpdate }) {
+function InventoryItemCard({ item, plant, onRemove, onUpdate, onToggleStarted, lastFrostMMDD, firstFrostMMDD }) {
   const [editing, setEditing] = useState(false);
   const [variety, setVariety] = useState(item.variety || '');
   const [type, setType] = useState(item.type || 'seed');
@@ -73,6 +139,19 @@ function InventoryItemCard({ item, plant, onRemove, onUpdate }) {
               )}
             </div>
             <div className="flex items-center gap-2.5 shrink-0">
+              {item.type !== 'want' && (
+                <button
+                  onClick={() => onToggleStarted(item.id)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border ${
+                    item.started
+                      ? 'bg-forest/15 text-forest border-forest/25 hover:bg-forest/25'
+                      : 'bg-sage/8 text-sage-dark/40 hover:bg-sage/15 border-sage/15 dark:bg-sage/12 dark:text-sage/40 dark:border-sage-dark/20'
+                  }`}
+                  title={item.started ? 'Mark as not started' : 'Mark as started/planted'}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={() => setEditing(!editing)}
                 className="w-7 h-7 rounded-lg flex items-center justify-center bg-sage/8 text-sage-dark hover:bg-sage/15 dark:bg-sage/12 dark:text-sage border border-sage/15 dark:border-sage-dark/20 transition-all"
@@ -93,13 +172,36 @@ function InventoryItemCard({ item, plant, onRemove, onUpdate }) {
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ${
               item.type === 'want'
                 ? 'bg-bloom-blue/10 text-bloom-blue border border-bloom-blue/20'
-                : item.type === 'start'
-                  ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light border border-terra/20'
-                  : 'bg-sage/10 text-sage-dark dark:bg-sage/15 dark:text-sage-light border border-sage/20'
+                : item.type === 'plant'
+                  ? 'bg-forest/10 text-forest dark:bg-forest/15 dark:text-sage-light border border-forest/20'
+                  : item.type === 'start'
+                    ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light border border-terra/20'
+                    : 'bg-sage/10 text-sage-dark dark:bg-sage/15 dark:text-sage-light border border-sage/20'
             }`}>
-              {item.type === 'want' ? <ShoppingCart className="w-3 h-3" /> : item.type === 'start' ? <Flower2 className="w-3 h-3" /> : <Sprout className="w-3 h-3" />}
-              {item.type === 'want' ? 'Want to Buy' : item.type === 'start' ? 'Plant Start' : 'Seed'}
+              {item.type === 'want' ? <ShoppingCart className="w-3 h-3" /> : item.type === 'plant' ? <TreeDeciduous className="w-3 h-3" /> : item.type === 'start' ? <Flower2 className="w-3 h-3" /> : <Sprout className="w-3 h-3" />}
+              {item.type === 'want' ? 'Want to Buy' : item.type === 'plant' ? 'Plant' : item.type === 'start' ? 'Plant Start' : 'Seed'}
             </span>
+            {item.started && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-forest/10 text-forest border border-forest/20">
+                <Check className="w-3 h-3" /> Started
+              </span>
+            )}
+            {item.type === 'want' && (() => {
+              const rec = getBuyRecommendation(plant, lastFrostMMDD, firstFrostMMDD);
+              if (!rec) return null;
+              return (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium ${
+                  rec.rec === 'seed'
+                    ? 'bg-sage/10 text-sage-dark border border-sage/20'
+                    : rec.rec === 'start'
+                      ? 'bg-terra/10 text-terra-dark border border-terra/20'
+                      : 'bg-bloom-purple/10 text-bloom-purple border border-bloom-purple/20'
+                }`} title={rec.reason}>
+                  {rec.rec === 'seed' ? <Sprout className="w-3 h-3" /> : rec.rec === 'start' ? <Flower2 className="w-3 h-3" /> : <Info className="w-3 h-3" />}
+                  Buy {rec.rec === 'either' ? 'either' : rec.rec === 'seed' ? 'seeds' : 'starts'}
+                </span>
+              );
+            })()}
             {(() => {
               const vInfo = item.varietyInfo || lookupVariety(plant.id, item.variety);
               if (!vInfo) return null;
@@ -125,6 +227,15 @@ function InventoryItemCard({ item, plant, onRemove, onUpdate }) {
               <p className="text-[10px] text-sage-dark/50 dark:text-sage/40 italic" style={{ marginTop: 6 }}>{vInfo.notes}</p>
             );
           })()}
+          {item.type === 'want' && (() => {
+            const rec = getBuyRecommendation(plant, lastFrostMMDD, firstFrostMMDD);
+            if (!rec) return null;
+            return (
+              <p className="text-[10px] text-sage-dark/60 dark:text-sage/50" style={{ marginTop: 6 }}>
+                {rec.reason}
+              </p>
+            );
+          })()}
         </div>
       </div>
 
@@ -143,37 +254,23 @@ function InventoryItemCard({ item, plant, onRemove, onUpdate }) {
                 <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sage-dark/60 dark:text-sage/50 block" style={{ marginBottom: 10 }}>
                   Type
                 </label>
-                <div className="flex" style={{ gap: 8 }}>
-                  <button
-                    onClick={() => setType('seed')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'seed'
-                        ? 'bg-sage/15 border-sage/30 text-forest-deep dark:text-cream'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <Sprout className="w-3.5 h-3.5" /> Seed
-                  </button>
-                  <button
-                    onClick={() => setType('start')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'start'
-                        ? 'bg-terra/15 border-terra/30 text-forest-deep dark:text-cream'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <Flower2 className="w-3.5 h-3.5" /> Start
-                  </button>
-                  <button
-                    onClick={() => setType('want')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'want'
-                        ? 'bg-bloom-blue/15 border-bloom-blue/30 text-bloom-blue'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" /> Want
-                  </button>
+                <div className="flex flex-wrap" style={{ gap: 8 }}>
+                  {[
+                    { key: 'seed', label: 'Seed', icon: Sprout, active: 'bg-sage/15 border-sage/30 text-forest-deep dark:text-cream' },
+                    { key: 'start', label: 'Start', icon: Flower2, active: 'bg-terra/15 border-terra/30 text-forest-deep dark:text-cream' },
+                    { key: 'plant', label: 'Plant', icon: TreeDeciduous, active: 'bg-forest/15 border-forest/30 text-forest-deep dark:text-cream' },
+                    { key: 'want', label: 'Want', icon: ShoppingCart, active: 'bg-bloom-blue/15 border-bloom-blue/30 text-bloom-blue' },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setType(opt.key)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                        type === opt.key ? opt.active : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
+                      }`}
+                    >
+                      <opt.icon className="w-3.5 h-3.5" /> {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -346,37 +443,23 @@ function AddPlantCard({ plant, onAdd, userZone, existingCount }) {
                 <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-sage-dark/60 dark:text-sage/50 block" style={{ marginBottom: 10 }}>
                   What do I have?
                 </label>
-                <div className="flex" style={{ gap: 8 }}>
-                  <button
-                    onClick={() => setType('seed')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'seed'
-                        ? 'bg-sage/15 border-sage/30 text-forest-deep dark:text-cream'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <Sprout className="w-3.5 h-3.5" /> Seed
-                  </button>
-                  <button
-                    onClick={() => setType('start')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'start'
-                        ? 'bg-terra/15 border-terra/30 text-forest-deep dark:text-cream'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <Flower2 className="w-3.5 h-3.5" /> Start
-                  </button>
-                  <button
-                    onClick={() => setType('want')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
-                      type === 'want'
-                        ? 'bg-bloom-blue/15 border-bloom-blue/30 text-bloom-blue'
-                        : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
-                    }`}
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" /> Want
-                  </button>
+                <div className="flex flex-wrap" style={{ gap: 8 }}>
+                  {[
+                    { key: 'seed', label: 'Seed', icon: Sprout, active: 'bg-sage/15 border-sage/30 text-forest-deep dark:text-cream' },
+                    { key: 'start', label: 'Start', icon: Flower2, active: 'bg-terra/15 border-terra/30 text-forest-deep dark:text-cream' },
+                    { key: 'plant', label: 'Plant', icon: TreeDeciduous, active: 'bg-forest/15 border-forest/30 text-forest-deep dark:text-cream' },
+                    { key: 'want', label: 'Want', icon: ShoppingCart, active: 'bg-bloom-blue/15 border-bloom-blue/30 text-bloom-blue' },
+                  ].map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setType(opt.key)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all border ${
+                        type === opt.key ? opt.active : 'bg-transparent border-sage/10 text-sage-dark/50 dark:text-sage/40 hover:border-sage/20'
+                      }`}
+                    >
+                      <opt.icon className="w-3.5 h-3.5" /> {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -613,7 +696,11 @@ export default function SeedInventory() {
 
   const seedCount = state.seedInventory.filter(i => i.type === 'seed').length;
   const startCount = state.seedInventory.filter(i => i.type === 'start').length;
+  const plantCount = state.seedInventory.filter(i => i.type === 'plant').length;
   const wantCount = state.seedInventory.filter(i => i.type === 'want').length;
+  const startedCount = state.seedInventory.filter(i => i.started).length;
+  const plantedInYard = new Set(state.plots.flatMap(p => p.plants.map(pl => pl.plantId)));
+  const notPlantedYet = state.seedInventory.filter(i => i.type !== 'want' && !plantedInYard.has(i.plantId));
 
   return (
     <div className="h-full flex flex-col">
@@ -622,7 +709,7 @@ export default function SeedInventory() {
         {/* Top row: title + smart search + view toggle */}
         <div className="flex items-center" style={{ gap: 16 }}>
           <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream shrink-0">
-            Seed Inventory
+            Garden Inventory
           </h2>
           {state.seedInventory.length > 0 && (
             <button
@@ -678,19 +765,23 @@ export default function SeedInventory() {
                       </div>
                     )}
                   </div>
-                  {/* Seed/Start/Want toggle */}
+                  {/* Seed/Start/Plant/Want toggle */}
                   <button
-                    onClick={() => setQuickType(quickType === 'seed' ? 'start' : quickType === 'start' ? 'want' : 'seed')}
+                    onClick={() => {
+                      const cycle = ['seed', 'start', 'plant', 'want'];
+                      setQuickType(cycle[(cycle.indexOf(quickType) + 1) % cycle.length]);
+                    }}
                     className={`shrink-0 flex items-center rounded-xl text-[11px] font-medium transition-all ${
                       quickType === 'want' ? 'bg-bloom-blue/15 text-bloom-blue border border-bloom-blue/20'
+                        : quickType === 'plant' ? 'bg-forest/15 text-forest border border-forest/20'
                         : quickType === 'start' ? 'bg-terra/15 text-terra-dark dark:text-terra-light border border-terra/20'
                         : 'bg-sage/10 text-sage-dark/60 dark:text-sage/50 border border-sage/15'
                     }`}
                     style={{ padding: '6px 12px', gap: 5 }}
-                    title="Click to toggle: Seed → Start → Want"
+                    title="Click to toggle: Seed → Start → Plant → Want"
                   >
-                    {quickType === 'want' ? <ShoppingCart className="w-3.5 h-3.5" /> : quickType === 'start' ? <Flower2 className="w-3.5 h-3.5" /> : <Sprout className="w-3.5 h-3.5" />}
-                    {quickType === 'want' ? 'Want' : quickType === 'start' ? 'Start' : 'Seed'}
+                    {quickType === 'want' ? <ShoppingCart className="w-3.5 h-3.5" /> : quickType === 'plant' ? <TreeDeciduous className="w-3.5 h-3.5" /> : quickType === 'start' ? <Flower2 className="w-3.5 h-3.5" /> : <Sprout className="w-3.5 h-3.5" />}
+                    {quickType === 'want' ? 'Want' : quickType === 'plant' ? 'Plant' : quickType === 'start' ? 'Start' : 'Seed'}
                   </button>
                   <button
                     onClick={handleQuickAdd}
@@ -803,7 +894,7 @@ export default function SeedInventory() {
                 : 'border-transparent text-sage-dark/50 dark:text-sage/40 hover:text-sage-dark dark:hover:text-sage'
             }`}
           >
-            My Collection ({state.seedInventory.length})
+            My Collection ({state.seedInventory.length}){startedCount > 0 && ` · ${startedCount} started`}
           </button>
           <button
             onClick={() => setShowInventoryOnly(false)}
@@ -892,6 +983,18 @@ export default function SeedInventory() {
           </div>
         )}
 
+        {/* Needs planting banner */}
+        {showInventoryOnly && notPlantedYet.length > 0 && (
+          <div className="rounded-xl bg-terra/8 dark:bg-terra/12 border border-terra/15 dark:border-terra/20 flex items-center" style={{ padding: '12px 18px', marginBottom: 20, gap: 10 }}>
+            <Sprout className="w-4 h-4 text-terra shrink-0" />
+            <span className="text-xs text-terra-dark dark:text-terra-light">
+              <strong>{notPlantedYet.length}</strong> {notPlantedYet.length === 1 ? 'item' : 'items'} not yet placed in a garden plot:
+              {' '}{notPlantedYet.slice(0, 5).map(i => getPlantById(i.plantId)?.name).filter(Boolean).join(', ')}
+              {notPlantedYet.length > 5 && ` +${notPlantedYet.length - 5} more`}
+            </span>
+          </div>
+        )}
+
         {showInventoryOnly ? (
           viewMode === 'compact' ? (
             /* Compact list grouped by category */
@@ -918,10 +1021,23 @@ export default function SeedInventory() {
                             className={`flex items-center hover:bg-sage/5 dark:hover:bg-sage/5 transition-colors ${i > 0 ? 'border-t border-sage/8 dark:border-sage-dark/12' : ''}`}
                             style={{ padding: '10px 16px', gap: 12 }}
                           >
+                            {item.type !== 'want' && (
+                              <button
+                                onClick={() => dispatch({ type: 'TOGGLE_SEED_STARTED', payload: item.id })}
+                                className={`w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-all ${
+                                  item.started
+                                    ? 'bg-forest border-forest text-cream'
+                                    : 'border-sage/30 dark:border-sage-dark/40 hover:border-forest/50'
+                                }`}
+                                title={item.started ? 'Mark as not started' : 'Mark as started'}
+                              >
+                                {item.started && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5"><path d="M2 6l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </button>
+                            )}
                             <span className="text-base leading-none">{plant.emoji}</span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-baseline" style={{ gap: 6 }}>
-                                <span className="text-xs font-semibold text-forest-deep dark:text-cream">{plant.name}</span>
+                                <span className={`text-xs font-semibold text-forest-deep dark:text-cream ${item.started ? 'line-through opacity-60' : ''}`}>{plant.name}</span>
                                 {item.variety && (
                                   <span className="text-[11px] text-terra dark:text-terra-light font-medium">'{item.variety}'</span>
                                 )}
@@ -933,13 +1049,29 @@ export default function SeedInventory() {
                             <span className={`inline-flex items-center rounded-md text-[9px] font-medium ${
                               item.type === 'want'
                                 ? 'bg-bloom-blue/10 text-bloom-blue border border-bloom-blue/20'
-                                : item.type === 'start'
-                                  ? 'bg-terra/10 text-terra-dark dark:text-terra-light border border-terra/20'
-                                  : 'bg-sage/10 text-sage-dark dark:text-sage-light border border-sage/20'
+                                : item.type === 'plant'
+                                  ? 'bg-forest/10 text-forest border border-forest/20'
+                                  : item.type === 'start'
+                                    ? 'bg-terra/10 text-terra-dark dark:text-terra-light border border-terra/20'
+                                    : 'bg-sage/10 text-sage-dark dark:text-sage-light border border-sage/20'
                             }`} style={{ padding: '2px 8px', gap: 4 }}>
-                              {item.type === 'want' ? <ShoppingCart className="w-2.5 h-2.5" /> : item.type === 'start' ? <Flower2 className="w-2.5 h-2.5" /> : <Sprout className="w-2.5 h-2.5" />}
-                              {item.type === 'want' ? 'Want' : item.type === 'start' ? 'Start' : 'Seed'}
+                              {item.type === 'want' ? <ShoppingCart className="w-2.5 h-2.5" /> : item.type === 'plant' ? <TreeDeciduous className="w-2.5 h-2.5" /> : item.type === 'start' ? <Flower2 className="w-2.5 h-2.5" /> : <Sprout className="w-2.5 h-2.5" />}
+                              {item.type === 'want' ? 'Want' : item.type === 'plant' ? 'Plant' : item.type === 'start' ? 'Start' : 'Seed'}
                             </span>
+                            {item.type === 'want' && (() => {
+                              const rec = getBuyRecommendation(plant, state.lastFrostMMDD, state.firstFrostMMDD);
+                              if (!rec) return null;
+                              return (
+                                <span className={`inline-flex items-center rounded-md text-[9px] font-medium ${
+                                  rec.rec === 'seed' ? 'bg-sage/10 text-sage-dark border border-sage/20'
+                                    : rec.rec === 'start' ? 'bg-terra/10 text-terra-dark border border-terra/20'
+                                    : 'bg-bloom-purple/10 text-bloom-purple border border-bloom-purple/20'
+                                }`} style={{ padding: '2px 8px', gap: 3 }} title={rec.reason}>
+                                  {rec.rec === 'seed' ? <Sprout className="w-2.5 h-2.5" /> : <Flower2 className="w-2.5 h-2.5" />}
+                                  {rec.rec === 'seed' ? 'Seeds' : rec.rec === 'start' ? 'Starts' : 'Either'}
+                                </span>
+                              );
+                            })()}
                             {vInfo?.daysToMaturity && (
                               <span className="text-[10px] text-sage-dark/50 dark:text-sage/40 tabular-nums" style={{ minWidth: 28, textAlign: 'right' }}>{vInfo.daysToMaturity}d</span>
                             )}
@@ -968,6 +1100,9 @@ export default function SeedInventory() {
                   plant={getPlantById(item.plantId)}
                   onRemove={handleRemove}
                   onUpdate={handleUpdate}
+                  onToggleStarted={(id) => dispatch({ type: 'TOGGLE_SEED_STARTED', payload: id })}
+                  lastFrostMMDD={state.lastFrostMMDD}
+                  firstFrostMMDD={state.firstFrostMMDD}
                 />
               ))}
             </div>

@@ -43,7 +43,7 @@ const initialState = {
   editingPlotId: null,      // which plot is selected on the yard view
 
   // Seed inventory
-  seedInventory: [], // [{ id, plantId, type: 'seed'|'start', variety: string }]
+  seedInventory: [], // [{ id, plantId, type: 'seed'|'start'|'plant'|'want', variety: string }]
 
   // UI state
   darkMode: false,
@@ -53,6 +53,22 @@ const initialState = {
   selectedElementId: null,
   dragItem: null,
 };
+
+// Detect and tag quadrant garden groups that don't have a quadrantGroupId yet
+function migrateQuadrantGroups(plots) {
+  if (!Array.isArray(plots)) return plots;
+  const ungrouped = plots.filter(p => p && !p.quadrantGroupId);
+  // Match by name containing "Quadrant"
+  const candidates = ungrouped.filter(p => p.name && /quadrant/i.test(p.name));
+  // Group in sets of 4
+  const remaining = [...candidates];
+  while (remaining.length >= 4) {
+    const group = remaining.splice(0, 4);
+    const groupId = `quad-migrated-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+    plots = plots.map(p => group.includes(p) ? { ...p, quadrantGroupId: groupId } : p);
+  }
+  return plots;
+}
 
 function loadState() {
   try {
@@ -136,6 +152,10 @@ function loadState() {
           };
         });
       }
+      // Migrate: auto-detect quadrant groups for existing quadrant plots
+      if (parsed.plots) {
+        parsed.plots = migrateQuadrantGroups(parsed.plots);
+      }
       return { ...initialState, ...parsed };
     }
   } catch (err) {
@@ -213,12 +233,14 @@ function reducer(state, action) {
 
     case 'ADD_TO_INVENTORY': {
       // payload: { plantId, type: 'seed'|'start', variety?: string }
+      const entryType = action.payload.type || 'seed';
       const entry = {
         id: `inv-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
         plantId: action.payload.plantId,
-        type: action.payload.type || 'seed',
+        type: entryType,
         variety: action.payload.variety || '',
         varietyInfo: action.payload.varietyInfo || null,
+        started: entryType === 'plant' || entryType === 'start',
       };
       return { ...state, seedInventory: [...state.seedInventory, entry] };
     }
@@ -226,9 +248,15 @@ function reducer(state, action) {
       // payload: { id, ...updates }
       return {
         ...state,
-        seedInventory: state.seedInventory.map(item =>
-          item.id === action.payload.id ? { ...item, ...action.payload } : item
-        ),
+        seedInventory: state.seedInventory.map(item => {
+          if (item.id !== action.payload.id) return item;
+          const updated = { ...item, ...action.payload };
+          // Auto-mark started when type is plant or start
+          if (action.payload.type === 'plant' || action.payload.type === 'start') {
+            updated.started = true;
+          }
+          return updated;
+        }),
       };
     }
     case 'REMOVE_FROM_INVENTORY': {
@@ -236,6 +264,15 @@ function reducer(state, action) {
       return {
         ...state,
         seedInventory: state.seedInventory.filter(item => item.id !== action.payload),
+      };
+    }
+    case 'TOGGLE_SEED_STARTED': {
+      // payload: inventory item id — toggle the started/planted flag
+      return {
+        ...state,
+        seedInventory: state.seedInventory.map(item =>
+          item.id === action.payload ? { ...item, started: !item.started } : item
+        ),
       };
     }
 
@@ -248,6 +285,7 @@ function reducer(state, action) {
       // 4 plots arranged around a central open space for a fountain/feature
       const { quadW, quadH, gap, startX, startY } = action.payload;
       const now = Date.now();
+      const groupId = `quad-${now}`;
       const labels = [
         { name: 'NW Quadrant', icon: '🌿', dx: 0, dy: 0 },
         { name: 'NE Quadrant', icon: '🌸', dx: quadW + gap, dy: 0 },
@@ -265,6 +303,7 @@ function reducer(state, action) {
           heightFt: quadH,
           yardX: px,
           yardY: py,
+          quadrantGroupId: groupId,
           shape: [
             { x: px, y: py },
             { x: px + quadW, y: py },
@@ -281,12 +320,12 @@ function reducer(state, action) {
       };
     }
     case 'ADD_PLOT': {
-      // Place new plots staggered on the yard
-      const offset = state.plots.length * 5;
       const w = action.payload.widthFt || 10;
       const h = action.payload.heightFt || 8;
-      const px = 10 + offset;
-      const py = 10 + offset;
+      // Use viewport center if provided, otherwise stagger
+      const fallbackOffset = state.plots.length * 5;
+      const px = action.payload.startX != null ? action.payload.startX : 10 + fallbackOffset;
+      const py = action.payload.startY != null ? action.payload.startY : 10 + fallbackOffset;
       const newPlot = {
         id: `plot-${Date.now()}`,
         name: action.payload.name,
@@ -583,8 +622,21 @@ function reducer(state, action) {
       return { ...state, housePolygon: newPoly };
     }
 
-    case 'LOAD_CLOUD_STATE':
-      return { ...initialState, ...action.payload };
+    case 'LOAD_CLOUD_STATE': {
+      const cloudState = { ...initialState, ...action.payload };
+      // Apply quadrant migration to cloud data
+      if (Array.isArray(cloudState.plots)) {
+        const ungrouped = cloudState.plots.filter(p => p && !p.quadrantGroupId);
+        const candidates = ungrouped.filter(p => p.name && /quadrant/i.test(p.name));
+        const remaining = [...candidates];
+        while (remaining.length >= 4) {
+          const group = remaining.splice(0, 4);
+          const gid = `quad-cloud-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+          cloudState.plots = cloudState.plots.map(p => group.includes(p) ? { ...p, quadrantGroupId: gid } : p);
+        }
+      }
+      return cloudState;
+    }
 
     case 'RESET':
       localStorage.removeItem(STORAGE_KEY);
@@ -595,11 +647,68 @@ function reducer(state, action) {
   }
 }
 
+// Actions that are UI-only and shouldn't be recorded in undo history
+const SKIP_UNDO_ACTIONS = new Set([
+  'SET_DARK_MODE', 'SET_VIEW', 'SET_VIEW_MODE', 'SET_ACTIVE_PLOT',
+  'SET_DRAG_ITEM', 'SELECT_PLANT', 'DESELECT', 'SET_EDITING_PLOT',
+  'LOAD_CLOUD_STATE', 'RESET',
+]);
+
+// Actions that happen rapidly during drags — collapse into a single undo entry
+const COALESCE_ACTIONS = new Set([
+  'MOVE_YARD_ELEMENT', 'UPDATE_PLOT_SHAPE', 'UPDATE_HOUSE_VERTEX',
+  'MOVE_HOUSE_FEATURE', 'MOVE_YARD_ELEMENT_POLYGON',
+]);
+
+const MAX_UNDO_STACK = 50;
+
+function undoReducer(state, action) {
+  try {
+    if (action.type === 'UNDO') {
+      if (!state.undoStack || state.undoStack.length === 0) return state;
+      const prev = state.undoStack[state.undoStack.length - 1];
+      return {
+        current: { ...prev, darkMode: state.current.darkMode, activeView: state.current.activeView, viewMode: state.current.viewMode },
+        undoStack: state.undoStack.slice(0, -1),
+        lastAction: null,
+      };
+    }
+
+    const newCurrent = reducer(state.current, action);
+    if (newCurrent === state.current) return state;
+
+    if (SKIP_UNDO_ACTIONS.has(action.type)) {
+      return { ...state, current: newCurrent };
+    }
+
+    // For coalesce actions, don't push if the previous action was the same type
+    // This means a whole drag operation = one undo entry
+    if (COALESCE_ACTIONS.has(action.type) && state.lastAction === action.type) {
+      return { ...state, current: newCurrent };
+    }
+
+    return {
+      current: newCurrent,
+      undoStack: [...(state.undoStack || []).slice(-(MAX_UNDO_STACK - 1)), state.current],
+      lastAction: action.type,
+    };
+  } catch (err) {
+    console.error('Garden Grove: reducer error', action.type, err);
+    return state;
+  }
+}
+
 const StoreContext = createContext(null);
 
 export function StoreProvider({ children }) {
   const { user } = useAuth();
-  const [state, dispatch] = useReducer(reducer, null, loadState);
+  const [undoState, rawDispatch] = useReducer(undoReducer, null, () => ({
+    current: loadState(),
+    undoStack: [],
+    lastAction: null,
+  }));
+  const state = undoState.current;
+  const dispatch = rawDispatch;
   const [cloudLoaded, setCloudLoaded] = useState(false);
   const initialLoadDone = useRef(false);
 
@@ -645,12 +754,16 @@ export function StoreProvider({ children }) {
   }, [user]);
 
   // Save to localStorage + debounced cloud save
+  // IMPORTANT: Don't save to cloud until cloud data has been loaded first,
+  // otherwise we'd overwrite cloud data with empty/default state
   useEffect(() => {
-    saveState(state);
-    if (user) {
+    if (cloudLoaded || !user) {
+      saveState(state);
+    }
+    if (user && cloudLoaded) {
       debouncedCloudSave(user.id, state);
     }
-  }, [state, user]);
+  }, [state, user, cloudLoaded]);
 
   useEffect(() => {
     if (state.darkMode) {
@@ -660,8 +773,20 @@ export function StoreProvider({ children }) {
     }
   }, [state.darkMode]);
 
+  // Ctrl+Z undo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: 'UNDO' });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
-    <StoreContext.Provider value={{ state, dispatch }}>
+    <StoreContext.Provider value={{ state, dispatch, canUndo: undoState.undoStack.length > 0 }}>
       {children}
     </StoreContext.Provider>
   );

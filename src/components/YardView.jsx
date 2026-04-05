@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   Plus, Trash2, ZoomIn, ZoomOut, Maximize2, ArrowRight,
   Home, Flower2, Move, GripVertical, Fence, X,
-  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown
+  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown, RotateCw, Undo, Satellite
 } from 'lucide-react';
 import { ELEMENTS, ELEMENT_CATEGORIES, getElementById } from '../data/elements';
 import { ElementSVG } from './ElementRenderer';
@@ -69,7 +69,7 @@ function polyArea(shape) {
 }
 
 export default function YardView() {
-  const { state, dispatch } = useStore();
+  const { state, dispatch, canUndo } = useStore();
   const containerRef = useRef(null);
   const [zoom, setZoom] = useState(null);
   const [panOffset, setPanOffset] = useState(null);
@@ -95,6 +95,7 @@ export default function YardView() {
   const [draggingYardElement, setDraggingYardElement] = useState(null); // { id, startX, startY, startElX, startElY }
   const [resizingYardElement, setResizingYardElement] = useState(null); // { id, handle, startX, startY, startW, startH }
   const [rotatingYardElement, setRotatingYardElement] = useState(null); // { id, startAngle, startRotation }
+  const [rotatingPlot, setRotatingPlot] = useState(null); // { ids, cx, cy, startAngle, currentAngle }
 
   // House feature placement
   const [houseFeatureMenu, setHouseFeatureMenu] = useState(null); // { edgeIndex, t, screenX, screenY }
@@ -108,6 +109,9 @@ export default function YardView() {
   // Copy/paste clipboard
   const [clipboardElement, setClipboardElement] = useState(null); // copied yard element data
   const [copyFeedback, setCopyFeedback] = useState(null); // 'copied' | 'pasted' for brief toast
+
+  // Satellite overlay
+  const [showSatellite, setShowSatellite] = useState(false);
 
   const svgW = state.yardWidthFt * SCALE;
   const svgH = state.yardHeightFt * SCALE;
@@ -395,6 +399,13 @@ export default function YardView() {
       }
       return;
     }
+    if (rotatingPlot) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const angle = Math.atan2(svg.y - rotatingPlot.cy, svg.x - rotatingPlot.cx) * 180 / Math.PI;
+      const delta = Math.round((angle - rotatingPlot.startAngle) / 5) * 5; // snap to 5°
+      setRotatingPlot(prev => ({ ...prev, currentAngle: delta }));
+      return;
+    }
     if (draggingVertex) {
       const svg = toSVG(e.clientX, e.clientY);
       const plot = state.plots.find(p => p.id === draggingVertex.plotId);
@@ -448,7 +459,30 @@ export default function YardView() {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+
+  // Rotate a group of plots clockwise around their collective center
+  const handleRotatePlots = useCallback((plotIds, degrees = 45) => {
+    const plots = plotIds.map(id => state.plots.find(p => p.id === id)).filter(Boolean);
+    if (plots.length === 0) return;
+
+    const allPts = plots.flatMap(p => getPlotShape(p));
+    const cx = allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length;
+    const cy = allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length;
+
+    const rad = (degrees * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    for (const plot of plots) {
+      const shape = getPlotShape(plot);
+      const newShape = shape.map(pt => ({
+        x: parseFloat((cx + (pt.x - cx) * cos - (pt.y - cy) * sin).toFixed(2)),
+        y: parseFloat((cy + (pt.x - cx) * sin + (pt.y - cy) * cos).toFixed(2)),
+      }));
+      dispatch({ type: 'UPDATE_PLOT_SHAPE', payload: { id: plot.id, shape: newShape } });
+    }
+  }, [state.plots, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
     setIsPanning(false);
@@ -458,6 +492,13 @@ export default function YardView() {
     if (draggingYardElement) { setDraggingYardElement(null); return; }
     if (resizingYardElement) { setResizingYardElement(null); return; }
     if (rotatingYardElement) { setRotatingYardElement(null); return; }
+    if (rotatingPlot) {
+      if (rotatingPlot.currentAngle !== 0) {
+        handleRotatePlots(rotatingPlot.ids, rotatingPlot.currentAngle);
+      }
+      setRotatingPlot(null);
+      return;
+    }
     if (draggingVertex) {
       setDraggingVertex(null);
       return;
@@ -490,7 +531,7 @@ export default function YardView() {
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, plotPending, movingPlot, moveOffset, state.plots, dispatch]);
+  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, rotatingPlot, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -585,8 +626,16 @@ export default function YardView() {
     }
 
     // Normal click: if this plot isn't in multi-selection, clear multi-selection
+    // But if it's part of a quadrant group, auto-select all siblings
     if (!multiSelectedPlots.has(plot.id)) {
-      setMultiSelectedPlots(new Set());
+      if (plot.quadrantGroupId) {
+        const siblings = state.plots
+          .filter(p => p.quadrantGroupId === plot.quadrantGroupId)
+          .map(p => p.id);
+        setMultiSelectedPlots(new Set(siblings));
+      } else {
+        setMultiSelectedPlots(new Set());
+      }
       setMultiSelectedElements(new Set());
     }
 
@@ -642,7 +691,7 @@ export default function YardView() {
       startY: e.clientY,
       startShape: getPlotShape(plot),
     });
-  }, [dispatch, state.editingPlotId, zoom, panOffset, toSVG]);
+  }, [dispatch, state.editingPlotId, state.plots, multiSelectedPlots, zoom, panOffset, toSVG]);
 
   const handlePlotDoubleClick = useCallback((plot, e) => {
     e.stopPropagation();
@@ -656,13 +705,27 @@ export default function YardView() {
   }, [dispatch]);
 
   const handleDeletePlot = useCallback(() => {
-    if (state.editingPlotId) {
-      const plot = state.plots.find(p => p.id === state.editingPlotId);
-      if (plot && confirm(`Delete "${plot.name}"? This will remove all plants and elements in it.`)) {
-        dispatch({ type: 'REMOVE_PLOT', payload: state.editingPlotId });
+    // Delete all multi-selected plots, or just the editing plot
+    const idsToDelete = multiSelectedPlots.size > 0
+      ? [...multiSelectedPlots]
+      : state.editingPlotId ? [state.editingPlotId] : [];
+    if (idsToDelete.length === 0) return;
+
+    const names = idsToDelete
+      .map(id => state.plots.find(p => p.id === id)?.name)
+      .filter(Boolean);
+    const msg = names.length === 1
+      ? `Delete "${names[0]}"? This will remove all plants and elements in it.`
+      : `Delete ${names.length} plots (${names.join(', ')})? This will remove all plants and elements in them.`;
+
+    if (confirm(msg)) {
+      for (const id of idsToDelete) {
+        dispatch({ type: 'REMOVE_PLOT', payload: id });
       }
+      setMultiSelectedPlots(new Set());
+      setMultiSelectedElements(new Set());
     }
-  }, [state.editingPlotId, state.plots, dispatch]);
+  }, [state.editingPlotId, state.plots, multiSelectedPlots, dispatch]);
 
   // --- Touch Handlers (iPad / mobile) ---
   const touchRef = useRef({ startDist: 0, startZoom: 1, mode: null });
@@ -725,6 +788,13 @@ export default function YardView() {
             e.preventDefault();
             touchRef.current.mode = 'plot-pending';
             dispatch({ type: 'SET_EDITING_PLOT', payload: plot.id });
+            // Auto-select quadrant siblings for touch
+            if (plot.quadrantGroupId) {
+              const siblings = state.plots
+                .filter(p => p.quadrantGroupId === plot.quadrantGroupId)
+                .map(p => p.id);
+              setMultiSelectedPlots(new Set(siblings));
+            }
             setPlotPending({
               id: plot.id,
               startX: touch.clientX,
@@ -772,11 +842,21 @@ export default function YardView() {
         const dy = touch.clientY - plotPending.startY;
         if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
           touchRef.current.mode = 'plot-move';
+          // Collect starting shapes for multi-selected plots (quadrant groups)
+          const otherShapes = {};
+          if (multiSelectedPlots.size > 0) {
+            for (const pid of multiSelectedPlots) {
+              if (pid === plotPending.id) continue;
+              const p = state.plots.find(pp => pp.id === pid);
+              if (p) otherShapes[pid] = getPlotShape(p);
+            }
+          }
           setMovingPlot({
             id: plotPending.id,
             startMouseX: plotPending.startX,
             startMouseY: plotPending.startY,
             startShape: plotPending.startShape,
+            otherShapes,
           });
           setPlotPending(null);
         }
@@ -837,11 +917,15 @@ export default function YardView() {
       if (draggingYardElement) setDraggingYardElement(null);
       if (resizingYardElement) setResizingYardElement(null);
       if (rotatingYardElement) setRotatingYardElement(null);
+      if (rotatingPlot) {
+        if (rotatingPlot.currentAngle !== 0) handleRotatePlots(rotatingPlot.ids, rotatingPlot.currentAngle);
+        setRotatingPlot(null);
+      }
       if (draggingHouseFeature) setDraggingHouseFeature(null);
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
-  }, [draggingYardElement, resizingYardElement, rotatingYardElement, draggingHouseFeature]);
+  }, [draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, draggingHouseFeature, handleRotatePlots]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -859,7 +943,7 @@ export default function YardView() {
         setMultiSelectedPlots(new Set());
         setMultiSelectedElements(new Set());
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && state.editingPlotId && !draggingVertex) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (state.editingPlotId || multiSelectedPlots.size > 0) && !draggingVertex) {
         handleDeletePlot();
       }
       // Delete selected house feature
@@ -867,11 +951,23 @@ export default function YardView() {
         dispatch({ type: 'REMOVE_HOUSE_FEATURE', payload: selectedHouseFeature });
         setSelectedHouseFeature(null);
       }
-      // Delete selected yard element
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedYardElement && !state.editingPlotId) {
-        dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: selectedYardElement });
-        setSelectedYardElement(null);
-        setEditingElementShape(null);
+      // Delete selected yard element(s)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedYardElement || multiSelectedElements.size > 0) && !state.editingPlotId) {
+        if (multiSelectedElements.size > 0) {
+          const names = [...multiSelectedElements].length;
+          if (confirm(`Delete ${names} yard element${names !== 1 ? 's' : ''}?`)) {
+            for (const eid of multiSelectedElements) {
+              dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: eid });
+            }
+            setMultiSelectedElements(new Set());
+            setSelectedYardElement(null);
+            setEditingElementShape(null);
+          }
+        } else if (selectedYardElement) {
+          dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: selectedYardElement });
+          setSelectedYardElement(null);
+          setEditingElementShape(null);
+        }
       }
       // Copy selected yard element (Ctrl+C)
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedYardElement) {
@@ -892,6 +988,12 @@ export default function YardView() {
         setSelectedYardElement(newId);
         setCopyFeedback('pasted');
         setTimeout(() => setCopyFeedback(null), 1200);
+      }
+      // Ctrl+Z undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        dispatch({ type: 'UNDO' });
+        return;
       }
       // Arrow nudge — move entire shape
       if (state.editingPlotId && ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
@@ -917,7 +1019,7 @@ export default function YardView() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [state.editingPlotId, draggingVertex, handleDeletePlot, dispatch, state.plots, selectedYardElement, state.yardElements, clipboardElement]);
+  }, [state.editingPlotId, draggingVertex, handleDeletePlot, dispatch, state.plots, selectedYardElement, state.yardElements, clipboardElement, multiSelectedPlots, multiSelectedElements]);
 
   const editingPlot = state.plots.find(p => p.id === state.editingPlotId);
 
@@ -929,6 +1031,18 @@ export default function YardView() {
       if (movingPlot?.id === plot.id || (movingPlot?.otherShapes && plot.id in movingPlot.otherShapes)) {
         shape = shape.map(pt => ({ x: pt.x + moveOffset.dx, y: pt.y + moveOffset.dy }));
       }
+    }
+    // Rotation preview
+    if (rotatingPlot && rotatingPlot.currentAngle !== 0 && rotatingPlot.ids.includes(plot.id)) {
+      const rad = (rotatingPlot.currentAngle * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const cx = rotatingPlot.cx / SCALE;
+      const cy = rotatingPlot.cy / SCALE;
+      shape = shape.map(pt => ({
+        x: cx + (pt.x - cx) * cos - (pt.y - cy) * sin,
+        y: cy + (pt.x - cx) * sin + (pt.y - cy) * cos,
+      }));
     }
     return shape;
   };
@@ -987,9 +1101,16 @@ export default function YardView() {
                             payload: { quadW: 8, quadH: 8, gap: 4, startX: sx, startY: sy },
                           });
                         } else {
+                          // Place plot centered on current viewport
+                          const rect = containerRef.current?.getBoundingClientRect();
+                          let cx = 15, cy = 15;
+                          if (rect && zoom && panOffset) {
+                            cx = Math.round(((rect.width / 2 - panOffset.x) / zoom) / SCALE) - Math.round(tpl.w / 2);
+                            cy = Math.round(((rect.height / 2 - panOffset.y) / zoom) / SCALE) - Math.round(tpl.h / 2);
+                          }
                           dispatch({
                             type: 'ADD_PLOT',
-                            payload: { name: tpl.name, icon: tpl.icon, widthFt: tpl.w, heightFt: tpl.h },
+                            payload: { name: tpl.name, icon: tpl.icon, widthFt: tpl.w, heightFt: tpl.h, startX: cx, startY: cy },
                           });
                         }
                         setShowAddMenu(false);
@@ -1022,6 +1143,20 @@ export default function YardView() {
               }`}
             >
               <Home className="w-3.5 h-3.5" /> {editingHouse ? 'Done Editing' : 'Edit House'}
+            </button>
+          )}
+
+          {/* Satellite overlay toggle */}
+          {state.yardGeoVertices && (
+            <button
+              onClick={() => setShowSatellite(!showSatellite)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
+                showSatellite
+                  ? 'bg-terra text-cream'
+                  : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
+              }`}
+            >
+              <Satellite className="w-3.5 h-3.5" /> Satellite
             </button>
           )}
 
@@ -1222,13 +1357,52 @@ export default function YardView() {
             </button>
           </div>
 
-          {/* Delete selected plot */}
-          {editingPlot && (
+          {/* Undo button */}
+          <button
+            onClick={() => dispatch({ type: 'UNDO' })}
+            disabled={!canUndo}
+            className={`ml-1 p-1.5 rounded-lg transition-all ${
+              canUndo
+                ? 'text-sage-dark dark:text-sage hover:bg-sage/10'
+                : 'text-sage-dark/20 dark:text-sage/15 cursor-not-allowed'
+            }`}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo className="w-4 h-4" />
+          </button>
+
+          {/* Rotate selected plot(s) */}
+          {editingPlot && (() => {
+            // Determine which plots to rotate
+            let rotateIds;
+            if (multiSelectedPlots.size > 1) {
+              rotateIds = [...multiSelectedPlots];
+            } else if (editingPlot.quadrantGroupId) {
+              rotateIds = state.plots.filter(p => p.quadrantGroupId === editingPlot.quadrantGroupId).map(p => p.id);
+            } else if (/quadrant/i.test(editingPlot.name)) {
+              const siblings = state.plots.filter(p => /quadrant/i.test(p.name));
+              rotateIds = siblings.length >= 4 ? siblings.map(p => p.id) : [editingPlot.id];
+            } else {
+              rotateIds = [editingPlot.id];
+            }
+            return (
+              <button
+                onClick={() => handleRotatePlots(rotateIds, 45)}
+                className="ml-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-forest/8 text-forest hover:bg-forest/15 transition-all duration-200 flex items-center gap-1.5 border border-forest/15"
+                title="Rotate 45°"
+              >
+                <RotateCw className="w-3 h-3" /> Rotate 45°
+              </button>
+            );
+          })()}
+
+          {/* Delete selected plot(s) */}
+          {(editingPlot || multiSelectedPlots.size > 0) && (
             <button
               onClick={handleDeletePlot}
               className="ml-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-bloom-red/8 text-bloom-red hover:bg-bloom-red/15 transition-all duration-200 flex items-center gap-1.5 border border-bloom-red/15"
             >
-              <Trash2 className="w-3 h-3" /> Delete Plot
+              <Trash2 className="w-3 h-3" /> Delete{multiSelectedPlots.size > 1 ? ` (${multiSelectedPlots.size})` : ''}
             </button>
           )}
         </div>
@@ -1259,7 +1433,7 @@ export default function YardView() {
         }}
       >
         <svg width="100%" height="100%"
-          style={{ cursor: draggingVertex ? 'grabbing' : movingPlot ? 'grabbing' : isPanning ? 'grabbing' : 'default' }}>
+          style={{ cursor: draggingVertex ? 'grabbing' : rotatingPlot ? 'crosshair' : movingPlot ? 'grabbing' : isPanning ? 'grabbing' : 'default' }}>
           {zoom !== null && panOffset !== null && <>
           <defs>
             {/* Grass texture pattern */}
@@ -1298,6 +1472,32 @@ export default function YardView() {
             ) : (
               <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" rx={4} stroke="#5A8A3A" strokeWidth={1} opacity={0.95} />
             )}
+
+            {/* Satellite overlay */}
+            {showSatellite && state.yardGeoVertices && state.yardGeoVertices.length >= 3 && (() => {
+              const lats = state.yardGeoVertices.map(v => v[0]);
+              const lngs = state.yardGeoVertices.map(v => v[1]);
+              const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+              const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+              // Add a small padding to the bounding box
+              const padLat = (maxLat - minLat) * 0.05;
+              const padLng = (maxLng - minLng) * 0.05;
+              const bbox = `${minLng - padLng},${minLat - padLat},${maxLng + padLng},${maxLat + padLat}`;
+              const imgW = Math.round(svgW * 2); // 2x for sharpness
+              const imgH = Math.round(svgH * 2);
+              const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=${imgW},${imgH}&format=png&f=image`;
+              return (
+                <image
+                  href={url}
+                  x={0} y={0}
+                  width={svgW} height={svgH}
+                  opacity={0.7}
+                  preserveAspectRatio="none"
+                  clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}
+                  style={{ pointerEvents: 'none' }}
+                />
+              );
+            })()}
 
             {/* Subtle yard grid — every 10 feet */}
             <g clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}>
@@ -1903,7 +2103,7 @@ export default function YardView() {
                   {/* Plant dots & element previews — mapped from plot OBB space to yard coords */}
                   {(() => {
                     if (!shape || shape.length < 3) return null;
-                    // Find the OBB primary axis
+                    // Find the OBB primary axis (longest edge direction)
                     let maxLen = 0, aDx = 1, aDy = 0;
                     for (let si = 0; si < shape.length; si++) {
                       const sj = (si + 1) % shape.length;
@@ -1912,7 +2112,15 @@ export default function YardView() {
                       const len = Math.sqrt(dx * dx + dy * dy);
                       if (len > maxLen) { maxLen = len; aDx = dx / len; aDy = dy / len; }
                     }
+                    // Normalize axis so content isn't mirrored — ensure primary axis
+                    // points rightward (or downward if vertical)
+                    if (aDx < 0 || (aDx === 0 && aDy < 0)) {
+                      aDx = -aDx;
+                      aDy = -aDy;
+                    }
                     const pDx = -aDy, pDy = aDx;
+                    // Ensure perpendicular points downward (or rightward)
+                    // so Y-axis mapping stays consistent with planner view
                     let minA = Infinity, minP = Infinity;
                     for (const pt of shape) {
                       minA = Math.min(minA, pt.x * aDx + pt.y * aDy);
@@ -1997,6 +2205,60 @@ export default function YardView() {
                           />
                         </g>
                       ))}
+
+                      {/* Rotate handle — above top of plot */}
+                      {(() => {
+                        const minY = Math.min(...shape.map(p => p.y));
+                        const handleY = minY * SCALE - 24 / zoom;
+                        const handleX = c.x * SCALE;
+
+                        // Determine which plots to rotate together
+                        let rotIds = [plot.id];
+                        if (plot.quadrantGroupId) {
+                          rotIds = state.plots.filter(p => p.quadrantGroupId === plot.quadrantGroupId).map(p => p.id);
+                        } else if (/quadrant/i.test(plot.name)) {
+                          const siblings = state.plots.filter(p => /quadrant/i.test(p.name));
+                          if (siblings.length >= 4) rotIds = siblings.map(p => p.id);
+                        }
+
+                        // For group rotation, use group centroid
+                        let rcx = c.x * SCALE, rcy = c.y * SCALE;
+                        if (rotIds.length > 1) {
+                          const allPts = rotIds.map(id => state.plots.find(p => p.id === id)).filter(Boolean).flatMap(p => getPlotShape(p));
+                          rcx = (allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length) * SCALE;
+                          rcy = (allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length) * SCALE;
+                        }
+
+                        return (
+                          <g style={{ pointerEvents: 'all' }}>
+                            {/* Line from centroid to handle */}
+                            <line x1={handleX} y1={minY * SCALE} x2={handleX} y2={handleY}
+                              stroke="#8B6AAE" strokeWidth={1.5 / zoom} opacity={0.5}
+                              style={{ pointerEvents: 'none' }} />
+                            {/* Rotate handle circle */}
+                            <circle
+                              cx={handleX} cy={handleY}
+                              r={7 / zoom}
+                              fill="#8B6AAE" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                              style={{ cursor: 'crosshair' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const svg = toSVG(e.clientX, e.clientY);
+                                const startAngle = Math.atan2(svg.y - rcy, svg.x - rcx) * 180 / Math.PI;
+                                setRotatingPlot({ ids: rotIds, cx: rcx, cy: rcy, startAngle, currentAngle: 0 });
+                              }}
+                            />
+                            {/* Rotate icon hint */}
+                            <text
+                              x={handleX} y={handleY}
+                              textAnchor="middle" dominantBaseline="central"
+                              fontSize={8 / zoom} fill="#FDF6E9"
+                              style={{ pointerEvents: 'none', fontWeight: 700 }}
+                            >↻</text>
+                          </g>
+                        );
+                      })()}
 
                       {/* Edge midpoint hints + edge length labels */}
                       {shape.map((pt, i) => {

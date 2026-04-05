@@ -85,6 +85,19 @@ function verticesToFeet(vertices, yardVertices) {
   }));
 }
 
+// Ray-casting point-in-polygon test (pixel space)
+function pointInPolygonPx(px, py, polyPixels) {
+  let inside = false;
+  for (let i = 0, j = polyPixels.length - 1; i < polyPixels.length; j = i++) {
+    const xi = polyPixels[i].x, yi = polyPixels[i].y;
+    const xj = polyPixels[j].x, yj = polyPixels[j].y;
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 // Interactive polygon editor — handles one polygon at a time
 function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
   const map = useMap();
@@ -137,10 +150,31 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
         return;
       }
     }
+
+    // Check if clicking inside the polygon — drag whole shape
+    const polyPixels = vertices.map(v => map.latLngToContainerPoint(L.latLng(v[0], v[1])));
+    if (pointInPolygonPx(pixel.x, pixel.y, polyPixels)) {
+      originalEvent.stopPropagation();
+      originalEvent.preventDefault();
+      dragging.current = { wholePolygon: true, startLatLng: latlng };
+      map.dragging.disable();
+      map.scrollWheelZoom.disable();
+      map.doubleClickZoom.disable();
+      if (map.touchZoom) map.touchZoom.disable();
+      return;
+    }
   }, [isActive, vertices, onChange, map, hitRadius, edgeHitRadius]);
 
   const handlePointerMove = useCallback((latlng) => {
     if (!dragging.current) return;
+    if (dragging.current.wholePolygon) {
+      const dLat = latlng.lat - dragging.current.startLatLng.lat;
+      const dLng = latlng.lng - dragging.current.startLatLng.lng;
+      const newVertices = vertices.map(v => [v[0] + dLat, v[1] + dLng]);
+      dragging.current.startLatLng = latlng;
+      onChange(newVertices);
+      return;
+    }
     const { vertexIndex } = dragging.current;
     const newVertices = [...vertices];
     newVertices[vertexIndex] = [latlng.lat, latlng.lng];
@@ -226,6 +260,13 @@ function PolygonEditor({ vertices, onChange, color, fillColor, isActive }) {
             container.style.cursor = 'crosshair';
             return;
           }
+        }
+
+        // Check if inside polygon — show move cursor
+        const polyPixels = vertices.map(v => map.latLngToContainerPoint(L.latLng(v[0], v[1])));
+        if (pointInPolygonPx(pixel.x, pixel.y, polyPixels)) {
+          container.style.cursor = 'move';
+          return;
         }
 
         container.style.cursor = '';
@@ -375,7 +416,7 @@ export default function YardMapPicker({ initialWidth, initialHeight, initialCent
     const { width, height } = boundingBoxFt(yardVertices);
     const polygonFt = verticesToFeet(yardVertices, yardVertices);
     const houseFt = verticesToFeet(houseVertices, yardVertices);
-    onDimensionsChange(width, height, polygonFt, houseFt);
+    onDimensionsChange(width, height, polygonFt, houseFt, yardVertices);
   }, [yardVertices, houseVertices, onDimensionsChange]);
 
   // Geocode address

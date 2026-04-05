@@ -982,7 +982,7 @@ function PlotEditor() {
                 const pos = getPlantPosition(p);
                 const isSelected = selectedId === p.id;
                 const isWantItem = state.seedInventory.some(item => item.plantId === p.plantId && item.type === 'want') &&
-                  !state.seedInventory.some(item => item.plantId === p.plantId && (item.type === 'seed' || item.type === 'start'));
+                  !state.seedInventory.some(item => item.plantId === p.plantId && (item.type === 'seed' || item.type === 'start' || item.type === 'plant'));
                 return (
                   <g key={p.id}
                     onMouseDown={(e) => handleItemMouseDown('plant', p.id, e)}

@@ -144,6 +144,7 @@ export default function Onboarding() {
   const [yardHeight, setYardHeight] = useState(appState.yardHeightFt || 60);
   const [yardPolygon, setYardPolygon] = useState(null); // [{x,y}] in feet
   const [housePolygon, setHousePolygon] = useState(null); // [{x,y}] in feet
+  const [yardGeoVertices, setYardGeoVertices] = useState(null); // [[lat,lng]] from map
   const [error, setError] = useState('');
   const [searching, setSearching] = useState(false);
 
@@ -257,11 +258,12 @@ export default function Onboarding() {
     }
   };
 
-  const handleMapDimensions = useCallback((w, h, polygonFt, houseFt) => {
+  const handleMapDimensions = useCallback((w, h, polygonFt, houseFt, geoVertices) => {
     setYardWidth(Math.max(20, Math.min(500, w)));
     setYardHeight(Math.max(20, Math.min(500, h)));
     if (polygonFt) setYardPolygon(polygonFt);
     if (houseFt !== undefined) setHousePolygon(houseFt);
+    if (geoVertices) setYardGeoVertices(geoVertices);
   }, []);
 
   const currentYear = new Date().getFullYear();
@@ -280,6 +282,7 @@ export default function Onboarding() {
         yardHeightFt: yardHeight,
         yardPolygon,
         housePolygon,
+        yardGeoVertices,
       },
     });
   };

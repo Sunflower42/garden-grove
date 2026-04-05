@@ -48,7 +48,7 @@ function formatDate(date) {
 }
 
 export default function SeedChecklist({ onClose }) {
-  const { state } = useStore();
+  const { state, dispatch } = useStore();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -59,26 +59,35 @@ export default function SeedChecklist({ onClose }) {
   const checklistItems = useMemo(() => {
     if (!lastFrostDate || !firstFrostDate) return [];
 
-    const plantIds = state.seedInventory.length > 0
-      ? state.seedInventory.map(item => item.plantId)
-      : state.plots.flatMap(p => p.plants.map(pl => pl.plantId));
+    // Build from inventory items when available, so we can track started per-item
+    const invItems = state.seedInventory.length > 0
+      ? state.seedInventory
+      : state.plots.flatMap(p => p.plants.map(pl => ({ id: pl.id, plantId: pl.plantId })));
 
-    const uniqueIds = [...new Set(plantIds)];
+    // Dedupe by plantId but keep inventory ids for toggle
+    const seen = new Set();
     const items = [];
 
-    for (const id of uniqueIds) {
-      const plant = getPlantById(id);
+    for (const inv of invItems) {
+      if (seen.has(inv.plantId)) continue;
+      seen.add(inv.plantId);
+      const plant = getPlantById(inv.plantId);
       if (!plant) continue;
       const dates = getPlantingDates(plant, lastFrostDate, firstFrostDate);
+
+      const variety = inv.variety || '';
 
       // Start indoors task
       if (dates.startIndoors && dates.startIndoors <= today) {
         items.push({
           plant,
+          variety,
+          invId: inv.id,
+          started: !!inv.started,
           action: 'Start indoors',
           date: dates.startIndoors,
           nextStep: dates.transplant ? `Transplant ${formatDate(dates.transplant)}` : null,
-          overdue: dates.startIndoors < today,
+          overdue: dates.startIndoors < today && !inv.started,
           sortDate: dates.startIndoors,
         });
       }
@@ -87,16 +96,23 @@ export default function SeedChecklist({ onClose }) {
       if (dates.directSow && dates.directSow <= today) {
         items.push({
           plant,
+          variety,
+          invId: inv.id,
+          started: !!inv.started,
           action: plant.plantInFall ? 'Plant outdoors' : 'Direct sow',
           date: dates.directSow,
           nextStep: null,
-          overdue: dates.directSow < today,
+          overdue: dates.directSow < today && !inv.started,
           sortDate: dates.directSow,
         });
       }
     }
 
-    items.sort((a, b) => a.sortDate.getTime() - b.sortDate.getTime());
+    // Sort: not-started first, then by date
+    items.sort((a, b) => {
+      if (a.started !== b.started) return a.started ? 1 : -1;
+      return a.sortDate.getTime() - b.sortDate.getTime();
+    });
     return items;
   }, [state.seedInventory, state.plots, lastFrostDate, firstFrostDate, today.getTime()]);
 
@@ -114,6 +130,7 @@ export default function SeedChecklist({ onClose }) {
   .emoji { font-size: 20px; line-height: 1; flex-shrink: 0; }
   .info { flex: 1; }
   .name { font-weight: 600; font-size: 15px; }
+  .variety { font-size: 12px; color: #b07040; font-weight: 500; margin-left: 6px; }
   .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 99px; margin-left: 8px; }
   .tag-indoor { background: #f0e6f6; color: #7b4fa0; }
   .tag-sow { background: #e8f0e4; color: #4a6e3a; }
@@ -129,7 +146,7 @@ ${checklistItems.length === 0 ? '<p class="empty">No seeds due yet!</p>' : check
   <div class="checkbox"></div>
   <span class="emoji">${item.plant.emoji}</span>
   <div class="info">
-    <div><span class="name">${item.plant.name}</span><span class="tag ${item.action === 'Start indoors' ? 'tag-indoor' : 'tag-sow'}">${item.action}</span></div>
+    <div><span class="name">${item.plant.name}</span>${item.variety ? `<span class="variety">'${item.variety}'</span>` : ''}<span class="tag ${item.action === 'Start indoors' ? 'tag-indoor' : 'tag-sow'}">${item.action}</span></div>
     <div class="details">Due ${formatDate(item.date)}${item.nextStep ? ` · ${item.nextStep}` : ''}${item.plant.daysToMaturity ? ` · ${item.plant.daysToMaturity} days to harvest` : ''}</div>
   </div>
   ${item.overdue ? '<span class="overdue">Overdue</span>' : ''}
@@ -168,6 +185,10 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
             <p className="text-sm text-sage-dark/70 dark:text-sage/60" style={{ marginTop: 4 }}>
               Seeds to start by {formatDate(today)} &middot; Zone {state.zone}
               {state.lastFrostMMDD && ` &middot; Last frost: ${formatDate(lastFrostDate)}`}
+              {checklistItems.length > 0 && (() => {
+                const done = checklistItems.filter(i => i.started).length;
+                return ` &middot; ${done}/${checklistItems.length} started`;
+              })()}
             </p>
           </div>
           <div className="flex items-center" data-print-hide style={{ gap: 8 }}>
@@ -209,10 +230,19 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
                   style={{ padding: '14px 18px', gap: 14 }}
                 >
                   {/* Checkbox */}
-                  <div
-                    className="w-5 h-5 rounded border-2 border-sage/30 dark:border-sage-dark/40 shrink-0"
+                  <button
+                    onClick={() => item.invId && dispatch({ type: 'TOGGLE_SEED_STARTED', payload: item.invId })}
+                    className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+                      item.started
+                        ? 'bg-forest border-forest text-cream'
+                        : 'border-sage/30 dark:border-sage-dark/40 hover:border-forest/50'
+                    }`}
                     style={{ marginTop: 2 }}
-                  />
+                  >
+                    {item.started && (
+                      <svg viewBox="0 0 12 12" className="w-3 h-3"><path d="M2 6l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    )}
+                  </button>
 
                   {/* Emoji */}
                   <span className="text-xl leading-none shrink-0" style={{ marginTop: 1 }}>
@@ -220,11 +250,16 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
                   </span>
 
                   {/* Info */}
-                  <div className="flex-1 min-w-0">
+                  <div className={`flex-1 min-w-0 ${item.started ? 'opacity-50' : ''}`}>
                     <div className="flex items-center flex-wrap" style={{ gap: 8 }}>
-                      <span className="font-medium text-forest-deep dark:text-cream">
+                      <span className={`font-medium text-forest-deep dark:text-cream ${item.started ? 'line-through' : ''}`}>
                         {item.plant.name}
                       </span>
+                      {item.variety && (
+                        <span className="text-[11px] text-terra dark:text-terra-light font-medium">
+                          '{item.variety}'
+                        </span>
+                      )}
                       <span className={`text-xs font-medium rounded-full print:border ${
                         item.action === 'Start indoors'
                           ? 'bg-bloom-purple/10 text-bloom-purple dark:bg-bloom-purple/20'

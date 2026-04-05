@@ -226,6 +226,25 @@ const VARIETIES = {
   'ornamental-grass': {
     'bunny tails': { daysToMaturity: 65, notes: 'Seed Savers. Lagurus ovatus. Soft, fluffy white seed heads. Adorable in arrangements. 12-18" tall.' },
   },
+  raspberry: {
+    'heritage': { daysToMaturity: 365, color: 'Red', notes: 'Everbearing. Two harvests per season. Very hardy and disease resistant.' },
+    'autumn bliss': { daysToMaturity: 365, color: 'Red', notes: 'Everbearing. Large berries, excellent flavor. Good for northern climates.' },
+    'anne': { daysToMaturity: 365, color: 'Golden yellow', notes: 'Everbearing yellow. Sweet, mild flavor. Less attractive to birds.' },
+    'jewel': { daysToMaturity: 365, color: 'Black', notes: 'Black raspberry. Intensely flavored. Great for jams and fresh eating.' },
+  },
+  blueberry: {
+    'top hat': { daysToMaturity: 365, color: 'Blue-black', notes: 'Dwarf highbush. Compact 18-24" plant, perfect for containers. Self-pollinating. Heavy yields for its size.' },
+    'bluecrop': { daysToMaturity: 365, color: 'Large blue', notes: 'Most widely planted variety. Reliable, productive. 4-6 ft tall.' },
+    'duke': { daysToMaturity: 365, color: 'Light blue', notes: 'Early season. Large firm berries. Vigorous grower.' },
+  },
+  rhubarb: {
+    'victoria': { daysToMaturity: 365, color: 'Green-red stalks', notes: 'Classic heirloom. Reliable, vigorous. Tart flavor perfect for pies.' },
+    'crimson red': { daysToMaturity: 365, color: 'Deep red stalks', notes: 'Sweeter than Victoria. Beautiful deep red color.' },
+  },
+  sorrel: {
+    'french': { daysToMaturity: 60, notes: 'Rumex scutatus. Milder, rounder leaves than common sorrel. Classic French cuisine.' },
+    'red veined': { daysToMaturity: 60, color: 'Green with red veins', notes: 'Striking ornamental and culinary. Slightly milder lemony flavor.' },
+  },
 };
 
 // Fuzzy match: try exact, then try partial match

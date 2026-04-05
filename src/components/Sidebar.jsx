@@ -9,7 +9,7 @@ import { useAuth } from '../AuthContext';
 import SettingsPanel from './SettingsPanel';
 
 const NAV_ITEMS = [
-  { id: 'inventory', label: 'Seed Inventory', icon: Package },
+  { id: 'inventory', label: 'Garden Inventory', icon: Package },
   { id: 'planner', label: 'Garden Planner', icon: Sprout },
   { id: 'calendar', label: 'Planting Calendar', icon: Calendar },
   { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
