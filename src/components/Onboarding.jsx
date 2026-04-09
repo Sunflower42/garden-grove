@@ -209,19 +209,36 @@ export default function Onboarding() {
     };
   }, []);
 
-  const selectSuggestion = (result) => {
+  const selectSuggestion = async (result) => {
     setAddress(result.display_name);
     setSuggestions([]);
     setShowSuggestions(false);
-    finalizeLookup(result);
+    setSearching(true);
+    await finalizeLookup(result);
+    setSearching(false);
   };
 
-  const finalizeLookup = (result) => {
+  const finalizeLookup = async (result) => {
     const lat = parseFloat(result.lat);
     const lng = parseFloat(result.lon);
     setGeocoded({ lat, lng });
 
-    const zip = result.address?.postcode?.slice(0, 5);
+    let zip = result.address?.postcode?.slice(0, 5);
+
+    // If forward geocode didn't return a postcode, reverse-geocode to get one
+    if (!zip || !/^\d{5}$/.test(zip)) {
+      try {
+        const revRes = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`,
+          { headers: { 'User-Agent': 'GardenGrove/1.0' } }
+        );
+        const revData = await revRes.json();
+        zip = revData.address?.postcode?.slice(0, 5);
+      } catch {
+        // Fall through to error below
+      }
+    }
+
     if (zip && /^\d{5}$/.test(zip)) {
       setZipCode(zip);
       const zData = lookupZone(zip);
@@ -251,7 +268,7 @@ export default function Onboarding() {
         setSearching(false);
         return;
       }
-      finalizeLookup(data[0]);
+      await finalizeLookup(data[0]);
       setSearching(false);
     } catch {
       setError('Search failed. Please check your connection and try again.');
