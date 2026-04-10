@@ -1094,6 +1094,39 @@ function PlotEditor() {
               </button>
             )}
 
+            {/* Clear All Plants */}
+            {(() => {
+              const allPlants = isQuadrantView
+                ? quadrantPlots.flatMap(p => ({ plotId: p.id, plants: p.plants }))
+                : [{ plotId: activePlot.id, plants: activePlot.plants }];
+              const total = allPlants.reduce((sum, p) => sum + p.plants.length, 0);
+              if (total === 0) return null;
+              return (
+                <button
+                  onClick={() => {
+                    if (!confirm(`Remove all ${total} plants?`)) return;
+                    if (isQuadrantView) {
+                      for (const plot of quadrantPlots) {
+                        for (const p of plot.plants) {
+                          dispatch({ type: 'REMOVE_PLANT', payload: { plotId: plot.id, id: p.id } });
+                        }
+                      }
+                    } else {
+                      for (const p of activePlot.plants) {
+                        dispatch({ type: 'REMOVE_PLANT', payload: { plotId: activePlot.id, id: p.id } });
+                      }
+                    }
+                    setSelectedId(null);
+                    setSelectedType(null);
+                  }}
+                  style={{ padding: '8px 14px', gap: 8 }}
+                  className="flex items-center rounded-lg text-xs font-medium bg-bloom-red/8 text-bloom-red hover:bg-bloom-red/15 transition-all border border-bloom-red/15"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Clear All ({total})
+                </button>
+              );
+            })()}
+
             {/* Delete */}
             {selectedId && (
               <button
