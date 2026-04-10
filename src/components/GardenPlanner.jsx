@@ -1045,21 +1045,46 @@ function PlotEditor() {
               <button
                 onClick={() => {
                   const plantIds = state.seedInventory.map(i => i.plantId);
-                  const layout = suggestLayout(plantIds, plotWidthFt, plotHeightFt);
-                  if (layout.length === 0) return;
-                  // Clear existing plants and place suggested ones
-                  const confirmed = activePlot.plants.length === 0 || confirm(`This will replace ${activePlot.plants.length} existing plants. Continue?`);
-                  if (!confirmed) return;
-                  // Remove existing plants
-                  for (const p of activePlot.plants) {
-                    dispatch({ type: 'REMOVE_PLANT', payload: { plotId: activePlot.id, id: p.id } });
-                  }
-                  // Place suggested layout
-                  for (const placement of layout) {
-                    dispatch({
-                      type: 'PLACE_PLANT',
-                      payload: { plotId: activePlot.id, plantId: placement.plantId, x: placement.x, y: placement.y },
-                    });
+                  if (isQuadrantView && quadrantLayout) {
+                    // Distribute plants across all 4 beds
+                    const allPlots = quadrantLayout.map(q => q.plot);
+                    const totalPlants = allPlots.reduce((sum, p) => sum + p.plants.length, 0);
+                    const confirmed = totalPlants === 0 || confirm(`This will replace ${totalPlants} existing plants across all beds. Continue?`);
+                    if (!confirmed) return;
+                    // Clear all beds
+                    for (const plot of allPlots) {
+                      for (const p of plot.plants) {
+                        dispatch({ type: 'REMOVE_PLANT', payload: { plotId: plot.id, id: p.id } });
+                      }
+                    }
+                    // Generate layout per bed
+                    const bedW = quadrantLayout[0].cellsW / 2; // in feet
+                    const bedH = quadrantLayout[0].cellsH / 2;
+                    const perBed = Math.ceil(plantIds.length / 4);
+                    for (let i = 0; i < 4 && i * perBed < plantIds.length; i++) {
+                      const bedPlantIds = plantIds.slice(i * perBed, (i + 1) * perBed);
+                      const layout = suggestLayout(bedPlantIds, bedW, bedH);
+                      for (const placement of layout) {
+                        dispatch({
+                          type: 'PLACE_PLANT',
+                          payload: { plotId: allPlots[i].id, plantId: placement.plantId, x: placement.x, y: placement.y },
+                        });
+                      }
+                    }
+                  } else {
+                    const layout = suggestLayout(plantIds, plotWidthFt, plotHeightFt);
+                    if (layout.length === 0) return;
+                    const confirmed = activePlot.plants.length === 0 || confirm(`This will replace ${activePlot.plants.length} existing plants. Continue?`);
+                    if (!confirmed) return;
+                    for (const p of activePlot.plants) {
+                      dispatch({ type: 'REMOVE_PLANT', payload: { plotId: activePlot.id, id: p.id } });
+                    }
+                    for (const placement of layout) {
+                      dispatch({
+                        type: 'PLACE_PLANT',
+                        payload: { plotId: activePlot.id, plantId: placement.plantId, x: placement.x, y: placement.y },
+                      });
+                    }
                   }
                 }}
                 style={{ padding: '8px 14px', gap: 8 }}
