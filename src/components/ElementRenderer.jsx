@@ -9,11 +9,36 @@ function seededRandom(seed) {
   };
 }
 
-export function ElementSVG({ element, x, y, width, height, cellSize, isSelected }) {
+export function ElementSVG({ element, x, y, width, height, cellSize, isSelected, polygon }) {
   const px = x;
   const py = y;
   const w = width;
   const h = height;
+
+  // If polygon is provided, render as a freeform polygon shape
+  if (polygon && polygon.length >= 3) {
+    const points = polygon.map(pt => `${pt.x},${pt.y}`).join(' ');
+    return (
+      <g>
+        {isSelected && (
+          <polygon
+            points={points}
+            fill="none"
+            stroke="#C17644"
+            strokeWidth={2}
+            strokeDasharray="6 3"
+          />
+        )}
+        <polygon
+          points={points}
+          fill={element.color}
+          stroke={element.borderColor}
+          strokeWidth={1.5}
+          opacity={0.75}
+        />
+      </g>
+    );
+  }
 
   return (
     <g>

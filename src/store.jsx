@@ -548,6 +548,17 @@ function reducer(state, action) {
       };
     }
 
+    case 'UPDATE_PLOT_ELEMENT_POLYGON': {
+      const { plotId, id, polygon } = action.payload;
+      return {
+        ...state,
+        plots: state.plots.map(p => {
+          if (p.id !== plotId) return p;
+          return { ...p, elements: p.elements.map(el => el.id === id ? { ...el, polygon } : el) };
+        }),
+      };
+    }
+
     case 'RERUN_SETUP':
       return { ...state, onboardingComplete: false, onboardingStartStep: 0 };
 

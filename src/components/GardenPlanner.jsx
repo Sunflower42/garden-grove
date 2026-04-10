@@ -58,6 +58,10 @@ function PlotEditor() {
   // Resize state
   const [resizing, setResizing] = useState(null); // { id, handle: 'se'|'e'|'s', startW, startH, startMouseX, startMouseY }
 
+  // Polygon shape editing for elements
+  const [editingElementShape, setEditingElementShape] = useState(null); // element id
+  const [draggingVertex, setDraggingVertex] = useState(null); // { elemId, vertexIndex }
+
   const activePlot = state.plots.find(p => p.id === state.activePlotId);
   if (!activePlot) return null;
 
@@ -156,8 +160,24 @@ function PlotEditor() {
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
       return;
     }
-    // Right click = cancel
+    // Right click = cancel or delete vertex
     if (e.button === 2) {
+      if (editingElementShape) {
+        e.preventDefault();
+        const el = activePlot.elements.find(el => el.id === editingElementShape);
+        if (el?.polygon && el.polygon.length > 3) {
+          const svg = toSVG(e.clientX, e.clientY);
+          for (let i = 0; i < el.polygon.length; i++) {
+            const dx = el.polygon[i].x - svg.x;
+            const dy = el.polygon[i].y - svg.y;
+            if (Math.sqrt(dx * dx + dy * dy) < 8) {
+              const newPoly = el.polygon.filter((_, idx) => idx !== i);
+              dispatch({ type: 'UPDATE_PLOT_ELEMENT_POLYGON', payload: { plotId: activePlot.id, id: el.id, polygon: newPoly } });
+              return;
+            }
+          }
+        }
+      }
       setPlacingItem(null);
       setPlacePreviewPos(null);
       setMovingItem(null);
@@ -165,7 +185,7 @@ function PlotEditor() {
       setResizing(null);
       return;
     }
-  }, [panOffset]);
+  }, [panOffset, editingElementShape, activePlot, toSVG, dispatch]);
 
   const handleMouseMove = useCallback((e) => {
     if (isPanning) {
@@ -174,6 +194,17 @@ function PlotEditor() {
     }
 
     const svg = toSVG(e.clientX, e.clientY);
+
+    // Vertex dragging for polygon editing
+    if (draggingVertex) {
+      const el = activePlot.elements.find(el => el.id === draggingVertex.elemId);
+      if (el?.polygon) {
+        const snapped = { x: Math.round(svg.x / (CELL_SIZE / 2)) * (CELL_SIZE / 2), y: Math.round(svg.y / (CELL_SIZE / 2)) * (CELL_SIZE / 2) };
+        const newPoly = el.polygon.map((pt, i) => i === draggingVertex.vertexIndex ? snapped : pt);
+        dispatch({ type: 'UPDATE_PLOT_ELEMENT_POLYGON', payload: { plotId: activePlot.id, id: el.id, polygon: newPoly } });
+      }
+      return;
+    }
 
     // Resize
     if (resizing) {
@@ -198,11 +229,17 @@ function PlotEditor() {
     if (placingItem) {
       setPlacePreviewPos({ x: snapToGrid(svg.x), y: snapToGrid(svg.y) });
     }
-  }, [isPanning, panStart, resizing, movingItem, placingItem, toSVG, zoom]);
+  }, [isPanning, panStart, resizing, movingItem, placingItem, draggingVertex, toSVG, zoom, activePlot, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
     if (e.button === 1) {
       setIsPanning(false);
+      return;
+    }
+
+    // End vertex drag
+    if (draggingVertex) {
+      setDraggingVertex(null);
       return;
     }
 
@@ -234,7 +271,7 @@ function PlotEditor() {
       setMovePos(null);
       return;
     }
-  }, [resizing, movingItem, movePos, dispatch, activePlot?.id]);
+  }, [resizing, movingItem, movePos, draggingVertex, dispatch, activePlot?.id]);
 
   const handleCanvasClick = useCallback((e) => {
     // If we're in placement mode, place the item
@@ -273,6 +310,8 @@ function PlotEditor() {
     if (target === svgRef.current || target.classList?.contains('garden-bg') || target.tagName === 'line') {
       setSelectedId(null);
       setSelectedType(null);
+      setEditingElementShape(null);
+      setDraggingVertex(null);
     }
   }, [placingItem, placePreviewPos, dispatch, activePlot?.id]);
 
@@ -937,6 +976,7 @@ function PlotEditor() {
                       width={pos.w} height={pos.h}
                       cellSize={CELL_SIZE}
                       isSelected={isSelected}
+                      polygon={elem.polygon}
                     />
                     {/* Resize handle — bottom-right corner */}
                     {isSelected && !movingItem && (
@@ -974,6 +1014,53 @@ function PlotEditor() {
                   </g>
                 );
               })}
+
+              {/* Polygon vertex editing overlay */}
+              {editingElementShape && (() => {
+                const el = activePlot.elements.find(el => el.id === editingElementShape);
+                if (!el?.polygon) return null;
+                return (
+                  <g>
+                    {/* Vertex dots */}
+                    {el.polygon.map((pt, i) => (
+                      <circle
+                        key={`v-${i}`}
+                        cx={pt.x} cy={pt.y} r={5}
+                        fill="#C17644" stroke="white" strokeWidth={1.5}
+                        style={{ cursor: 'move' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          setDraggingVertex({ elemId: el.id, vertexIndex: i });
+                        }}
+                      />
+                    ))}
+                    {/* Edge midpoints — click to add vertex */}
+                    {el.polygon.map((pt, i) => {
+                      const next = el.polygon[(i + 1) % el.polygon.length];
+                      const mx = (pt.x + next.x) / 2;
+                      const my = (pt.y + next.y) / 2;
+                      return (
+                        <circle
+                          key={`mid-${i}`}
+                          cx={mx} cy={my} r={4}
+                          fill="white" stroke="#C17644" strokeWidth={1.5}
+                          opacity={0.7}
+                          style={{ cursor: 'copy' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const newPoly = [...el.polygon];
+                            newPoly.splice(i + 1, 0, { x: mx, y: my });
+                            dispatch({ type: 'UPDATE_PLOT_ELEMENT_POLYGON', payload: { plotId: activePlot.id, id: el.id, polygon: newPoly } });
+                            setDraggingVertex({ elemId: el.id, vertexIndex: i + 1 });
+                          }}
+                        />
+                      );
+                    })}
+                  </g>
+                );
+              })()}
 
               {/* Placed plants */}
               {activePlot.plants.map(p => {
@@ -1082,10 +1169,42 @@ function PlotEditor() {
                       <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/60 dark:text-sage/60">
                         <Move className="w-3 h-3" /> Drag to move
                       </span>
-                      {selectedType === 'element' && (
+                      {selectedType === 'element' && !editingElementShape && (
                         <span className="badge bg-terra/8 text-terra/80">
                           <GripVertical className="w-3 h-3" /> Corner to resize
                         </span>
+                      )}
+                      {selectedType === 'element' && selectedInfo.data?.polygonEditable && (
+                        <button
+                          onClick={() => {
+                            const el = activePlot.elements.find(el => el.id === selectedId);
+                            if (!el) return;
+                            if (editingElementShape === el.id) {
+                              setEditingElementShape(null);
+                              setDraggingVertex(null);
+                            } else {
+                              // Initialize polygon from bounding box if not set
+                              if (!el.polygon) {
+                                const pos = getElementPosition(el);
+                                const poly = [
+                                  { x: pos.x, y: pos.y },
+                                  { x: pos.x + pos.w, y: pos.y },
+                                  { x: pos.x + pos.w, y: pos.y + pos.h },
+                                  { x: pos.x, y: pos.y + pos.h },
+                                ];
+                                dispatch({ type: 'UPDATE_PLOT_ELEMENT_POLYGON', payload: { plotId: activePlot.id, id: el.id, polygon: poly } });
+                              }
+                              setEditingElementShape(el.id);
+                            }
+                          }}
+                          className={`badge transition-colors ${
+                            editingElementShape === selectedId
+                              ? 'bg-terra text-cream'
+                              : 'bg-terra/8 text-terra/80 hover:bg-terra/15'
+                          }`}
+                        >
+                          <GripVertical className="w-3 h-3" /> {editingElementShape === selectedId ? 'Done Shaping' : 'Edit Shape'}
+                        </button>
                       )}
                     </div>
                     {selectedType === 'plant' && selectedInfo.data.companions?.length > 0 && (
