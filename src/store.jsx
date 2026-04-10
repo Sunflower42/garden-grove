@@ -70,13 +70,12 @@ function migrateQuadrantGroups(plots) {
   return plots;
 }
 
-// Strip bad web-sourced varietyInfo (e.g. non-gardening results)
+// Strip all web-sourced varietyInfo and any notes containing HTML entities (bad scrapes)
 function cleanBadVarietyInfo(inventory) {
-  const gardenTerms = /maturity|harvest|sow|seed|plant|grow|heirloom|variety|garden|fruit|vegetable|herb|bloom|flower|organic/i;
   return inventory.map(item => {
-    if (item.varietyInfo?.source === 'web' && item.varietyInfo.notes && !gardenTerms.test(item.varietyInfo.notes)) {
-      return { ...item, varietyInfo: null };
-    }
+    if (!item.varietyInfo) return item;
+    if (item.varietyInfo.source === 'web') return { ...item, varietyInfo: null };
+    if (item.varietyInfo.notes && /&(?:quot|amp|lt|gt|#\d{2,4});/.test(item.varietyInfo.notes)) return { ...item, varietyInfo: null };
     return item;
   });
 }
