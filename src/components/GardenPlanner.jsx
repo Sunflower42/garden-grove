@@ -86,10 +86,72 @@ function PlotEditor() {
   const activePlot = state.plots.find(p => p.id === state.activePlotId);
   if (!activePlot) return null;
 
+  // Quadrant group detection — render all sibling beds together
+  const isQuadrantView = !!activePlot.quadrantGroupId;
+  const quadrantPlots = useMemo(() => {
+    if (!isQuadrantView) return null;
+    return state.plots.filter(p => p.quadrantGroupId === activePlot.quadrantGroupId);
+  }, [isQuadrantView, activePlot.quadrantGroupId, state.plots]);
+
+  // Compute quadrant layout offsets (positions relative to group origin)
+  const quadrantLayout = useMemo(() => {
+    if (!quadrantPlots) return null;
+    // Find bounding box of all quadrant plots in yard coordinates
+    let minX = Infinity, minY = Infinity;
+    for (const p of quadrantPlots) {
+      minX = Math.min(minX, p.yardX);
+      minY = Math.min(minY, p.yardY);
+    }
+    // Each plot gets an offset in the combined SVG (in cell units)
+    return quadrantPlots.map(p => ({
+      plot: p,
+      offsetX: (p.yardX - minX) * 2, // *2 because 1ft = 2 cells
+      offsetY: (p.yardY - minY) * 2,
+      cellsW: p.widthFt * 2,
+      cellsH: p.heightFt * 2,
+    }));
+  }, [quadrantPlots]);
+
+  // For quadrant view, the "active plot" for placement is determined by click position
+  const [targetPlotId, setTargetPlotId] = useState(activePlot.id);
+
+  // Find which plot owns an item by id
+  const findPlotForItem = useCallback((type, id) => {
+    if (!isQuadrantView) return activePlot;
+    for (const q of quadrantLayout) {
+      const list = type === 'plant' ? q.plot.plants : q.plot.elements;
+      if (list.some(item => item.id === id)) return q.plot;
+    }
+    return activePlot;
+  }, [isQuadrantView, quadrantLayout, activePlot]);
+
+  // Which plot does a cell coordinate fall in? (for quadrant view)
+  const getPlotAtCell = useCallback((cellX, cellY) => {
+    if (!quadrantLayout) return activePlot;
+    for (const q of quadrantLayout) {
+      if (cellX >= q.offsetX && cellX < q.offsetX + q.cellsW &&
+          cellY >= q.offsetY && cellY < q.offsetY + q.cellsH) {
+        return q.plot;
+      }
+    }
+    return null; // In the gap
+  }, [quadrantLayout, activePlot]);
+
   // Derive dimensions using oriented bounding box (OBB) so angled plots
   // show their true length × width, not the axis-aligned bounding box.
   // Also compute the rotation angle and transformed outline points.
   const { plotWidthFt, plotHeightFt, plotRotationDeg, plotOutlineLocal } = useMemo(() => {
+    if (isQuadrantView && quadrantPlots) {
+      // Combined dimensions: bounding box of all quadrant plots
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of quadrantPlots) {
+        minX = Math.min(minX, p.yardX);
+        minY = Math.min(minY, p.yardY);
+        maxX = Math.max(maxX, p.yardX + p.widthFt);
+        maxY = Math.max(maxY, p.yardY + p.heightFt);
+      }
+      return { plotWidthFt: maxX - minX, plotHeightFt: maxY - minY, plotRotationDeg: 0, plotOutlineLocal: null };
+    }
     if (!activePlot.shape || activePlot.shape.length < 3) {
       return { plotWidthFt: activePlot.widthFt, plotHeightFt: activePlot.heightFt, plotRotationDeg: 0, plotOutlineLocal: null };
     }
@@ -135,7 +197,7 @@ function PlotEditor() {
     return length >= width
       ? { plotWidthFt: length, plotHeightFt: width, plotRotationDeg: rotDeg, plotOutlineLocal: localPts }
       : { plotWidthFt: width, plotHeightFt: length, plotRotationDeg: rotDeg + 90, plotOutlineLocal: localPts.map(p => ({ x: p.y, y: length - p.x })) };
-  }, [activePlot.shape, activePlot.widthFt, activePlot.heightFt]);
+  }, [isQuadrantView, quadrantPlots, activePlot.shape, activePlot.widthFt, activePlot.heightFt]);
 
   const gridW = plotWidthFt * 2;
   const gridH = plotHeightFt * 2;
@@ -145,12 +207,15 @@ function PlotEditor() {
   // Companion planting status for selected plant
   const companionMap = useMemo(() => {
     if (!selectedId || selectedType !== 'plant') return {};
-    const selectedPlacement = activePlot.plants.find(p => p.id === selectedId);
+    const allPlants = isQuadrantView
+      ? quadrantPlots.flatMap(p => p.plants)
+      : activePlot.plants;
+    const selectedPlacement = allPlants.find(p => p.id === selectedId);
     if (!selectedPlacement) return {};
     const selectedPlant = getPlantById(selectedPlacement.plantId);
     if (!selectedPlant) return {};
     const map = {};
-    activePlot.plants.forEach(p => {
+    allPlants.forEach(p => {
       if (p.id === selectedId) return;
       if (selectedPlant.companions.includes(p.plantId)) map[p.id] = 'good';
       else if (selectedPlant.avoid.includes(p.plantId)) map[p.id] = 'bad';
@@ -291,10 +356,11 @@ function PlotEditor() {
 
     // Commit resize
     if (resizing && resizing.currentW !== undefined) {
+      const resizePlot = findPlotForItem('element', resizing.id);
       dispatch({
         type: 'RESIZE_ELEMENT',
         payload: {
-          plotId: activePlot.id,
+          plotId: resizePlot.id,
           id: resizing.id,
           width: resizing.currentW,
           height: resizing.currentH,
@@ -306,12 +372,17 @@ function PlotEditor() {
 
     // Commit move
     if (movingItem && movePos) {
-      const newX = movePos.x / CELL_SIZE;
-      const newY = movePos.y / CELL_SIZE;
+      const movePlot = findPlotForItem(movingItem.type, movingItem.id);
+      // In quadrant view, convert combined coords back to local plot coords
+      const q = quadrantLayout?.find(q => q.plot.id === movePlot.id);
+      const offsetPx = q ? q.offsetX * CELL_SIZE : 0;
+      const offsetPy = q ? q.offsetY * CELL_SIZE : 0;
+      const newX = (movePos.x - offsetPx) / CELL_SIZE;
+      const newY = (movePos.y - offsetPy) / CELL_SIZE;
       if (movingItem.type === 'plant') {
-        dispatch({ type: 'MOVE_PLANT', payload: { plotId: activePlot.id, id: movingItem.id, x: newX, y: newY } });
+        dispatch({ type: 'MOVE_PLANT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
       } else {
-        dispatch({ type: 'MOVE_ELEMENT', payload: { plotId: activePlot.id, id: movingItem.id, x: newX, y: newY } });
+        dispatch({ type: 'MOVE_ELEMENT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
       }
       setMovingItem(null);
       setMovePos(null);
@@ -357,10 +428,22 @@ function PlotEditor() {
       const cellX = placePreviewPos.x / CELL_SIZE;
       const cellY = placePreviewPos.y / CELL_SIZE;
 
+      // For quadrant view, find which bed the click falls in
+      const targetPlot = isQuadrantView ? getPlotAtCell(cellX, cellY) : activePlot;
+      if (!targetPlot) {
+        // Clicked in the gap — don't place
+        setPlacingItem(null);
+        setPlacePreviewPos(null);
+        return;
+      }
+      // Convert to local plot coordinates for quadrant view
+      const localX = isQuadrantView ? cellX - quadrantLayout.find(q => q.plot.id === targetPlot.id).offsetX : cellX;
+      const localY = isQuadrantView ? cellY - quadrantLayout.find(q => q.plot.id === targetPlot.id).offsetY : cellY;
+
       if (placingItem.type === 'plant') {
         dispatch({
           type: 'PLACE_PLANT',
-          payload: { plotId: activePlot.id, plantId: placingItem.id, x: cellX, y: cellY, variety: placingItem.variety || null },
+          payload: { plotId: targetPlot.id, plantId: placingItem.id, x: localX, y: localY, variety: placingItem.variety || null },
         });
       } else {
         const elem = getElementById(placingItem.id);
@@ -368,9 +451,9 @@ function PlotEditor() {
           dispatch({
             type: 'PLACE_ELEMENT',
             payload: {
-              plotId: activePlot.id,
+              plotId: targetPlot.id,
               elementId: placingItem.id,
-              x: cellX, y: cellY,
+              x: localX, y: localY,
               width: Math.ceil(elem.widthIn / 6),
               height: Math.ceil(elem.heightIn / 6),
             },
@@ -401,14 +484,28 @@ function PlotEditor() {
 
     const svg = toSVG(e.clientX, e.clientY);
     let itemX, itemY;
+    // Search across all relevant plots (quadrant or single)
+    const plotsToSearch = isQuadrantView ? quadrantPlots : [activePlot];
     if (type === 'plant') {
-      const p = activePlot.plants.find(p => p.id === id);
-      itemX = p.x * CELL_SIZE;
-      itemY = p.y * CELL_SIZE;
+      for (const plot of plotsToSearch) {
+        const p = plot.plants.find(p => p.id === id);
+        if (p) {
+          const q = quadrantLayout?.find(q => q.plot.id === plot.id);
+          itemX = p.x * CELL_SIZE + (q?.offsetX || 0) * CELL_SIZE;
+          itemY = p.y * CELL_SIZE + (q?.offsetY || 0) * CELL_SIZE;
+          break;
+        }
+      }
     } else {
-      const el = activePlot.elements.find(el => el.id === id);
-      itemX = el.x * CELL_SIZE;
-      itemY = el.y * CELL_SIZE;
+      for (const plot of plotsToSearch) {
+        const el = plot.elements.find(el => el.id === id);
+        if (el) {
+          const q = quadrantLayout?.find(q => q.plot.id === plot.id);
+          itemX = el.x * CELL_SIZE + (q?.offsetX || 0) * CELL_SIZE;
+          itemY = el.y * CELL_SIZE + (q?.offsetY || 0) * CELL_SIZE;
+          break;
+        }
+      }
     }
 
     setSelectedId(id);
@@ -418,7 +515,7 @@ function PlotEditor() {
       offsetX: svg.x - itemX,
       offsetY: svg.y - itemY,
     });
-  }, [placingItem, toSVG, activePlot]);
+  }, [placingItem, toSVG, activePlot, isQuadrantView, quadrantPlots, quadrantLayout]);
 
   // Start resizing an element
   const handleResizeMouseDown = useCallback((elemId, e) => {
@@ -437,10 +534,11 @@ function PlotEditor() {
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
+    const delPlot = findPlotForItem(selectedType, selectedId);
     if (selectedType === 'plant') {
-      dispatch({ type: 'REMOVE_PLANT', payload: { plotId: activePlot.id, id: selectedId } });
+      dispatch({ type: 'REMOVE_PLANT', payload: { plotId: delPlot.id, id: selectedId } });
     } else {
-      dispatch({ type: 'REMOVE_ELEMENT', payload: { plotId: activePlot.id, id: selectedId } });
+      dispatch({ type: 'REMOVE_ELEMENT', payload: { plotId: delPlot.id, id: selectedId } });
     }
     setSelectedId(null);
     setSelectedType(null);
@@ -534,12 +632,19 @@ function PlotEditor() {
   // Selected item info
   const selectedInfo = useMemo(() => {
     if (!selectedId) return null;
+    const plotsToSearch = isQuadrantView ? quadrantPlots : [activePlot];
     if (selectedType === 'plant') {
-      const placement = activePlot.plants.find(p => p.id === selectedId);
-      if (!placement) return null;
-      return { placement, data: getPlantById(placement.plantId) };
+      for (const plot of plotsToSearch) {
+        const placement = plot.plants.find(p => p.id === selectedId);
+        if (placement) return { placement, data: getPlantById(placement.plantId) };
+      }
+      return null;
     } else {
-      const placement = activePlot.elements.find(e => e.id === selectedId);
+      let placement = null;
+      for (const plot of plotsToSearch) {
+        placement = plot.elements.find(e => e.id === selectedId);
+        if (placement) break;
+      }
       if (!placement) return null;
       if (placement.drawnPath) {
         return { placement, data: { name: 'Drawn Path', emoji: '〰️', color: placement.drawnPath.color, description: `${placement.drawnPath.points.length} waypoints — drag points to adjust`, polygonEditable: false } };
@@ -842,9 +947,9 @@ function PlotEditor() {
             </button>
             <span className="text-sage/25 dark:text-sage-dark/40 select-none">/</span>
             <div className="flex items-center" style={{ gap: 12 }}>
-              <span className="text-base leading-none">{activePlot.icon}</span>
+              <span className="text-base leading-none">{isQuadrantView ? '✦' : activePlot.icon}</span>
               <h2 className="font-display text-lg font-semibold text-forest-deep dark:text-cream">
-                {activePlot.name}
+                {isQuadrantView ? 'Quadrant Garden' : activePlot.name}
               </h2>
             </div>
             <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/70 dark:text-sage/70 ml-1">
@@ -1065,6 +1170,46 @@ function PlotEditor() {
                   stroke="#8B9E7E" strokeWidth={i % 2 === 0 ? 0.5 : 0.2} opacity={i % 2 === 0 ? 0.25 : 0.12} />
               ))}
 
+              {/* Quadrant bed dividers */}
+              {isQuadrantView && quadrantLayout && (() => {
+                // Draw each bed as a filled rect, leaving gaps as the background shows through
+                // First, fill entire area with gap color (walking path)
+                return (
+                  <g>
+                    <rect x={0} y={0} width={svgW} height={svgH} fill="#C4B69A" rx={6} opacity={0.4} className="garden-bg" />
+                    {quadrantLayout.map(q => (
+                      <rect
+                        key={q.plot.id}
+                        x={q.offsetX * CELL_SIZE}
+                        y={q.offsetY * CELL_SIZE}
+                        width={q.cellsW * CELL_SIZE}
+                        height={q.cellsH * CELL_SIZE}
+                        fill="#E8DFC8"
+                        stroke="#A89878"
+                        strokeWidth={1.5}
+                        rx={4}
+                      />
+                    ))}
+                    {/* Bed labels */}
+                    {quadrantLayout.map(q => (
+                      <text
+                        key={`label-${q.plot.id}`}
+                        x={(q.offsetX + q.cellsW / 2) * CELL_SIZE}
+                        y={(q.offsetY + 1) * CELL_SIZE}
+                        textAnchor="middle"
+                        fontSize={9}
+                        fill="#8B9E7E"
+                        opacity={0.5}
+                        fontFamily="Outfit, sans-serif"
+                        fontWeight={500}
+                      >
+                        {q.plot.name}
+                      </text>
+                    ))}
+                  </g>
+                );
+              })()}
+
               {/* Foot markers */}
               {Array.from({ length: plotWidthFt + 1 }).map((_, i) => (
                 <text key={`ft-x-${i}`} x={i * CELL_SIZE * 2} y={-4} textAnchor="middle"
@@ -1076,7 +1221,9 @@ function PlotEditor() {
               ))}
 
               {/* Placed elements */}
-              {activePlot.elements.map(elem => {
+              {(isQuadrantView ? quadrantLayout.flatMap(q =>
+                q.plot.elements.map(el => ({ ...el, _plotId: q.plot.id, _offsetX: q.offsetX, _offsetY: q.offsetY }))
+              ) : activePlot.elements.map(el => ({ ...el, _plotId: activePlot.id, _offsetX: 0, _offsetY: 0 }))).map(elem => {
                 // Drawn path elements
                 if (elem.drawnPath) {
                   const dp = elem.drawnPath;
@@ -1159,7 +1306,8 @@ function PlotEditor() {
 
                 const elemData = getElementById(elem.elementId);
                 if (!elemData) return null;
-                const pos = getElementPosition(elem);
+                const rawPos = getElementPosition(elem);
+                const pos = { x: rawPos.x + elem._offsetX * CELL_SIZE, y: rawPos.y + elem._offsetY * CELL_SIZE, w: rawPos.w, h: rawPos.h };
                 const isSelected = selectedId === elem.id;
                 return (
                   <g key={elem.id}
@@ -1259,10 +1407,13 @@ function PlotEditor() {
               })()}
 
               {/* Placed plants */}
-              {activePlot.plants.map(p => {
+              {(isQuadrantView ? quadrantLayout.flatMap(q =>
+                q.plot.plants.map(p => ({ ...p, _plotId: q.plot.id, _offsetX: q.offsetX, _offsetY: q.offsetY }))
+              ) : activePlot.plants.map(p => ({ ...p, _plotId: activePlot.id, _offsetX: 0, _offsetY: 0 }))).map(p => {
                 const plantData = getPlantById(p.plantId);
                 if (!plantData) return null;
-                const pos = getPlantPosition(p);
+                const rawPos = getPlantPosition(p);
+                const pos = { x: rawPos.x + p._offsetX * CELL_SIZE, y: rawPos.y + p._offsetY * CELL_SIZE };
                 const isSelected = selectedId === p.id;
                 const isWantItem = state.seedInventory.some(item => item.plantId === p.plantId && item.type === 'want') &&
                   !state.seedInventory.some(item => item.plantId === p.plantId && (item.type === 'seed' || item.type === 'start' || item.type === 'plant'));
