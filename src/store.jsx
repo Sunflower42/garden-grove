@@ -70,6 +70,17 @@ function migrateQuadrantGroups(plots) {
   return plots;
 }
 
+// Strip bad web-sourced varietyInfo (e.g. non-gardening results)
+function cleanBadVarietyInfo(inventory) {
+  const gardenTerms = /maturity|harvest|sow|seed|plant|grow|heirloom|variety|garden|fruit|vegetable|herb|bloom|flower|organic/i;
+  return inventory.map(item => {
+    if (item.varietyInfo?.source === 'web' && item.varietyInfo.notes && !gardenTerms.test(item.varietyInfo.notes)) {
+      return { ...item, varietyInfo: null };
+    }
+    return item;
+  });
+}
+
 function loadState() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -155,6 +166,10 @@ function loadState() {
       // Migrate: auto-detect quadrant groups for existing quadrant plots
       if (parsed.plots) {
         parsed.plots = migrateQuadrantGroups(parsed.plots);
+      }
+      // Clean bad web-sourced varietyInfo from inventory
+      if (parsed.seedInventory) {
+        parsed.seedInventory = cleanBadVarietyInfo(parsed.seedInventory);
       }
       return { ...initialState, ...parsed };
     }
@@ -677,6 +692,9 @@ function reducer(state, action) {
           const gid = `quad-cloud-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
           cloudState.plots = cloudState.plots.map(p => group.includes(p) ? { ...p, quadrantGroupId: gid } : p);
         }
+      }
+      if (cloudState.seedInventory) {
+        cloudState.seedInventory = cleanBadVarietyInfo(cloudState.seedInventory);
       }
       return cloudState;
     }
