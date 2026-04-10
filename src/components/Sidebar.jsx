@@ -126,40 +126,90 @@ export default function Sidebar() {
                 <span className="flex-1 truncate font-medium">Yard Overview</span>
               </div>
 
-              {state.plots.map(plot => (
-                <div
-                  key={plot.id}
-                  style={{ padding: '10px 16px', gap: 12, marginLeft: 8 }}
-                  className={`group flex items-center rounded-xl cursor-pointer text-sm transition-all duration-200 ${
-                    state.activePlotId === plot.id
-                      ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light shadow-sm'
-                      : 'text-soil-light dark:text-sage hover:bg-terra/5 dark:hover:bg-terra/8 hover:text-soil dark:hover:text-cream'
-                  }`}
-                  onClick={() => {
-                    dispatch({ type: 'SET_ACTIVE_PLOT', payload: plot.id });
-                    dispatch({ type: 'SET_VIEW', payload: 'planner' });
-                  }}
-                >
-                  <span className="text-sm leading-none">{plot.icon}</span>
-                  <span className="flex-1 truncate font-medium">{plot.name}</span>
-                  <span className="badge bg-sage/10 dark:bg-sage/15 text-sage-dark dark:text-sage">
-                    {plot.plants.length}
-                  </span>
-                  {state.plots.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete "${plot.name}"?`)) {
-                          dispatch({ type: 'REMOVE_PLOT', payload: plot.id });
-                        }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-bloom-red/10"
-                    >
-                      <Trash2 className="w-3 h-3 text-bloom-red/50 hover:text-bloom-red" />
-                    </button>
-                  )}
-                </div>
-              ))}
+              {(() => {
+                // Group quadrant plots into a single entry
+                const seenGroups = new Set();
+                const items = [];
+                for (const plot of state.plots) {
+                  if (plot.quadrantGroupId) {
+                    if (seenGroups.has(plot.quadrantGroupId)) continue;
+                    seenGroups.add(plot.quadrantGroupId);
+                    const siblings = state.plots.filter(p => p.quadrantGroupId === plot.quadrantGroupId);
+                    const totalPlants = siblings.reduce((sum, p) => sum + p.plants.length, 0);
+                    const isActive = siblings.some(p => p.id === state.activePlotId);
+                    items.push(
+                      <div
+                        key={`quad-${plot.quadrantGroupId}`}
+                        style={{ padding: '10px 16px', gap: 12, marginLeft: 8 }}
+                        className={`group flex items-center rounded-xl cursor-pointer text-sm transition-all duration-200 ${
+                          isActive
+                            ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light shadow-sm'
+                            : 'text-soil-light dark:text-sage hover:bg-terra/5 dark:hover:bg-terra/8 hover:text-soil dark:hover:text-cream'
+                        }`}
+                        onClick={() => {
+                          dispatch({ type: 'SET_ACTIVE_PLOT', payload: siblings[0].id });
+                          dispatch({ type: 'SET_VIEW', payload: 'planner' });
+                        }}
+                      >
+                        <span className="text-sm leading-none">✦</span>
+                        <span className="flex-1 truncate font-medium">Quadrant Garden</span>
+                        <span className="badge bg-sage/10 dark:bg-sage/15 text-sage-dark dark:text-sage">
+                          {totalPlants}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('Delete all 4 quadrant beds?')) {
+                              for (const s of siblings) {
+                                dispatch({ type: 'REMOVE_PLOT', payload: s.id });
+                              }
+                            }
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-bloom-red/10"
+                        >
+                          <Trash2 className="w-3 h-3 text-bloom-red/50 hover:text-bloom-red" />
+                        </button>
+                      </div>
+                    );
+                  } else {
+                    items.push(
+                      <div
+                        key={plot.id}
+                        style={{ padding: '10px 16px', gap: 12, marginLeft: 8 }}
+                        className={`group flex items-center rounded-xl cursor-pointer text-sm transition-all duration-200 ${
+                          state.activePlotId === plot.id
+                            ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light shadow-sm'
+                            : 'text-soil-light dark:text-sage hover:bg-terra/5 dark:hover:bg-terra/8 hover:text-soil dark:hover:text-cream'
+                        }`}
+                        onClick={() => {
+                          dispatch({ type: 'SET_ACTIVE_PLOT', payload: plot.id });
+                          dispatch({ type: 'SET_VIEW', payload: 'planner' });
+                        }}
+                      >
+                        <span className="text-sm leading-none">{plot.icon}</span>
+                        <span className="flex-1 truncate font-medium">{plot.name}</span>
+                        <span className="badge bg-sage/10 dark:bg-sage/15 text-sage-dark dark:text-sage">
+                          {plot.plants.length}
+                        </span>
+                        {state.plots.length > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Delete "${plot.name}"?`)) {
+                                dispatch({ type: 'REMOVE_PLOT', payload: plot.id });
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-bloom-red/10"
+                          >
+                            <Trash2 className="w-3 h-3 text-bloom-red/50 hover:text-bloom-red" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  }
+                }
+                return items;
+              })()}
 
             </motion.div>
           )}
