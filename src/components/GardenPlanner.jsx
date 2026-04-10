@@ -15,6 +15,29 @@ import { generateRecommendations } from '../data/recommendations';
 
 const CELL_SIZE = 24; // pixels per 6 inches
 
+// Convert waypoints to a smooth SVG path using Catmull-Rom → cubic bezier
+function smoothPath(points) {
+  if (points.length < 2) return '';
+  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
+
+  let d = `M ${points[0].x},${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    // Catmull-Rom to cubic bezier control points
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 export default function GardenPlanner() {
   const { state, dispatch } = useStore();
 
@@ -61,6 +84,10 @@ function PlotEditor() {
   // Polygon shape editing for elements
   const [editingElementShape, setEditingElementShape] = useState(null); // element id
   const [draggingVertex, setDraggingVertex] = useState(null); // { elemId, vertexIndex }
+
+  // Path drawing mode
+  const [drawingPath, setDrawingPath] = useState(null); // { points: [{x,y}], width: number, color, borderColor }
+  const [draggingPathPoint, setDraggingPathPoint] = useState(null); // index of point being dragged on a drawn path element
 
   const activePlot = state.plots.find(p => p.id === state.activePlotId);
   if (!activePlot) return null;
@@ -195,6 +222,16 @@ function PlotEditor() {
 
     const svg = toSVG(e.clientX, e.clientY);
 
+    // Path point dragging
+    if (draggingPathPoint !== null) {
+      const el = activePlot.elements.find(el => el.id === selectedId);
+      if (el?.drawnPath) {
+        const newPoints = el.drawnPath.points.map((pt, i) => i === draggingPathPoint ? { x: svg.x, y: svg.y } : pt);
+        dispatch({ type: 'UPDATE_DRAWN_PATH', payload: { plotId: activePlot.id, id: el.id, points: newPoints } });
+      }
+      return;
+    }
+
     // Vertex dragging for polygon editing
     if (draggingVertex) {
       const el = activePlot.elements.find(el => el.id === draggingVertex.elemId);
@@ -229,11 +266,17 @@ function PlotEditor() {
     if (placingItem) {
       setPlacePreviewPos({ x: snapToGrid(svg.x), y: snapToGrid(svg.y) });
     }
-  }, [isPanning, panStart, resizing, movingItem, placingItem, draggingVertex, toSVG, zoom, activePlot, dispatch]);
+  }, [isPanning, panStart, resizing, movingItem, placingItem, draggingVertex, draggingPathPoint, selectedId, toSVG, zoom, activePlot, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
     if (e.button === 1) {
       setIsPanning(false);
+      return;
+    }
+
+    // End path point drag
+    if (draggingPathPoint !== null) {
+      setDraggingPathPoint(null);
       return;
     }
 
@@ -271,9 +314,41 @@ function PlotEditor() {
       setMovePos(null);
       return;
     }
-  }, [resizing, movingItem, movePos, draggingVertex, dispatch, activePlot?.id]);
+  }, [resizing, movingItem, movePos, draggingVertex, draggingPathPoint, dispatch, activePlot?.id]);
+
+  // Double-click detection for path drawing
+  const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
 
   const handleCanvasClick = useCallback((e) => {
+    // Path drawing mode
+    if (drawingPath) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const now = Date.now();
+      const last = lastClickRef.current;
+      const isDoubleClick = (now - last.time < 400) && Math.abs(svg.x - last.x) < 10 && Math.abs(svg.y - last.y) < 10;
+      lastClickRef.current = { time: now, x: svg.x, y: svg.y };
+
+      if (isDoubleClick && drawingPath.points.length >= 2) {
+        // Finish drawing — save the path
+        dispatch({
+          type: 'PLACE_DRAWN_PATH',
+          payload: {
+            plotId: activePlot.id,
+            points: drawingPath.points,
+            pathWidth: drawingPath.pathWidth,
+            color: drawingPath.color,
+            borderColor: drawingPath.borderColor,
+          },
+        });
+        setDrawingPath(null);
+        return;
+      }
+
+      // Add a point
+      setDrawingPath(prev => ({ ...prev, points: [...prev.points, { x: svg.x, y: svg.y }] }));
+      return;
+    }
+
     // If we're in placement mode, place the item
     if (placingItem && placePreviewPos) {
       const cellX = placePreviewPos.x / CELL_SIZE;
@@ -313,7 +388,7 @@ function PlotEditor() {
       setEditingElementShape(null);
       setDraggingVertex(null);
     }
-  }, [placingItem, placePreviewPos, dispatch, activePlot?.id]);
+  }, [placingItem, placePreviewPos, drawingPath, dispatch, activePlot?.id, toSVG]);
 
   // Start dragging a placed item to move it
   const handleItemMouseDown = useCallback((type, id, e) => {
@@ -463,6 +538,9 @@ function PlotEditor() {
     } else {
       const placement = activePlot.elements.find(e => e.id === selectedId);
       if (!placement) return null;
+      if (placement.drawnPath) {
+        return { placement, data: { name: 'Drawn Path', emoji: '〰️', color: placement.drawnPath.color, description: `${placement.drawnPath.points.length} waypoints — drag points to adjust`, polygonEditable: false } };
+      }
       return { placement, data: getElementById(placement.elementId) };
     }
   }, [selectedId, selectedType, activePlot]);
@@ -668,7 +746,42 @@ function PlotEditor() {
               );
             })
           ) : (
-            Object.entries(ELEMENT_CATEGORIES).map(([catKey, cat]) => {
+            <>
+            {/* Draw Path button */}
+            <button
+              onClick={() => {
+                if (drawingPath) {
+                  setDrawingPath(null);
+                } else {
+                  setDrawingPath({ points: [], pathWidth: 3, color: '#C4B69A', borderColor: '#A89878' });
+                  setPlacingItem(null);
+                  setSelectedId(null);
+                  setSelectedType(null);
+                }
+              }}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-lg text-left text-xs transition-all duration-150 ${
+                drawingPath
+                  ? 'bg-terra/10 dark:bg-terra/15 ring-1 ring-terra/50 shadow-sm'
+                  : 'hover:bg-sage/8 dark:hover:bg-sage/8'
+              }`}
+              style={{ marginBottom: 12 }}
+            >
+              <div className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center bg-[#C4B69A] border border-[#A89878]">
+                <svg viewBox="0 0 16 16" className="w-4 h-4"><path d="M2 12 C5 4, 11 4, 14 12" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
+              </div>
+              <div className="min-w-0">
+                <div className="text-forest-deep dark:text-cream truncate font-medium leading-tight">
+                  {drawingPath ? 'Cancel Drawing' : 'Draw Path'}
+                </div>
+                <div className="text-[9px] text-sage-dark/70 dark:text-sage/60 mt-0.5">Click to place points, double-click to finish</div>
+              </div>
+            </button>
+            {drawingPath && drawingPath.points.length > 0 && (
+              <div className="text-[10px] text-terra font-medium text-center" style={{ marginBottom: 8 }}>
+                {drawingPath.points.length} point{drawingPath.points.length !== 1 ? 's' : ''} — double-click to finish
+              </div>
+            )}
+            {Object.entries(ELEMENT_CATEGORIES).map(([catKey, cat]) => {
               const catElems = filteredElements.filter(e => e.category === catKey);
               if (catElems.length === 0) return null;
               return (
@@ -707,7 +820,7 @@ function PlotEditor() {
                 </div>
               );
             })
-          )}
+          }</>)}
         </div>
       </div>
 
@@ -961,6 +1074,52 @@ function PlotEditor() {
 
               {/* Placed elements */}
               {activePlot.elements.map(elem => {
+                // Drawn path elements
+                if (elem.drawnPath) {
+                  const dp = elem.drawnPath;
+                  const isSelected = selectedId === elem.id;
+                  const d = smoothPath(dp.points);
+                  if (!d) return null;
+                  return (
+                    <g key={elem.id}
+                      onMouseDown={(e) => {
+                        if (draggingPathPoint !== null) return;
+                        handleItemMouseDown('element', elem.id, e);
+                      }}
+                      style={{ cursor: 'grab' }}
+                    >
+                      {/* Path border/stroke */}
+                      <path d={d} fill="none" stroke={dp.borderColor} strokeWidth={dp.pathWidth * CELL_SIZE / 6 + 2}
+                        strokeLinecap="round" strokeLinejoin="round" opacity={0.6} />
+                      {/* Path fill */}
+                      <path d={d} fill="none" stroke={dp.color} strokeWidth={dp.pathWidth * CELL_SIZE / 6}
+                        strokeLinecap="round" strokeLinejoin="round" opacity={0.8} />
+                      {/* Selection highlight */}
+                      {isSelected && (
+                        <path d={d} fill="none" stroke="#C17644" strokeWidth={dp.pathWidth * CELL_SIZE / 6 + 6}
+                          strokeLinecap="round" strokeLinejoin="round" opacity={0.2} strokeDasharray="6 3" />
+                      )}
+                      {/* Invisible wider hit area for easier clicking */}
+                      <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(20, dp.pathWidth * CELL_SIZE / 6 + 10)}
+                        strokeLinecap="round" strokeLinejoin="round" />
+                      {/* Waypoint editing when selected */}
+                      {isSelected && !movingItem && dp.points.map((pt, i) => (
+                        <circle
+                          key={`wp-${i}`}
+                          cx={pt.x} cy={pt.y} r={5}
+                          fill="#C17644" stroke="white" strokeWidth={1.5}
+                          style={{ cursor: 'move' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setDraggingPathPoint(i);
+                          }}
+                        />
+                      ))}
+                    </g>
+                  );
+                }
+
                 const elemData = getElementById(elem.elementId);
                 if (!elemData) return null;
                 const pos = getElementPosition(elem);
@@ -1111,6 +1270,26 @@ function PlotEditor() {
                   </g>
                 );
               })}
+
+              {/* Drawing path preview */}
+              {drawingPath && drawingPath.points.length > 0 && (
+                <g style={{ pointerEvents: 'none' }}>
+                  {drawingPath.points.length >= 2 && (
+                    <>
+                      <path d={smoothPath(drawingPath.points)} fill="none"
+                        stroke={drawingPath.borderColor} strokeWidth={drawingPath.pathWidth * CELL_SIZE / 6 + 2}
+                        strokeLinecap="round" strokeLinejoin="round" opacity={0.4} />
+                      <path d={smoothPath(drawingPath.points)} fill="none"
+                        stroke={drawingPath.color} strokeWidth={drawingPath.pathWidth * CELL_SIZE / 6}
+                        strokeLinecap="round" strokeLinejoin="round" opacity={0.6} />
+                    </>
+                  )}
+                  {drawingPath.points.map((pt, i) => (
+                    <circle key={i} cx={pt.x} cy={pt.y} r={4}
+                      fill="#C17644" stroke="white" strokeWidth={1.5} opacity={0.8} />
+                  ))}
+                </g>
+              )}
 
               {/* Placement preview */}
               {placingItem && placePreviewPos && (

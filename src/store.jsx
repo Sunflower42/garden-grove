@@ -511,6 +511,40 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'PLACE_DRAWN_PATH': {
+      const { plotId, points, pathWidth, color, borderColor } = action.payload;
+      return {
+        ...state,
+        plots: state.plots.map(p => {
+          if (p.id !== plotId) return p;
+          return {
+            ...p,
+            elements: [...p.elements, {
+              id: `path-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+              elementId: 'drawn-path',
+              x: 0, y: 0, width: 0, height: 0,
+              drawnPath: { points, pathWidth: pathWidth || 36, color: color || '#C4B69A', borderColor: borderColor || '#A89878' },
+            }],
+          };
+        }),
+      };
+    }
+    case 'UPDATE_DRAWN_PATH': {
+      const { plotId, id, points } = action.payload;
+      return {
+        ...state,
+        plots: state.plots.map(p => {
+          if (p.id !== plotId) return p;
+          return {
+            ...p,
+            elements: p.elements.map(el => {
+              if (el.id !== id || !el.drawnPath) return el;
+              return { ...el, drawnPath: { ...el.drawnPath, points } };
+            }),
+          };
+        }),
+      };
+    }
     case 'MOVE_ELEMENT': {
       const { plotId, id, x, y } = action.payload;
       return {
@@ -528,6 +562,13 @@ function reducer(state, action) {
                 const dx = (x - el.x) * CELL;
                 const dy = (y - el.y) * CELL;
                 updated.polygon = el.polygon.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+              }
+              // Translate drawn path points if they exist
+              if (el.drawnPath) {
+                const CELL = 24;
+                const dx = (x - el.x) * CELL;
+                const dy = (y - el.y) * CELL;
+                updated.drawnPath = { ...el.drawnPath, points: el.drawnPath.points.map(pt => ({ x: pt.x + dx, y: pt.y + dy })) };
               }
               return updated;
             }),
