@@ -95,20 +95,29 @@ function PlotEditor() {
 
   // Compute quadrant layout offsets (positions relative to group origin)
   const quadrantLayout = useMemo(() => {
-    if (!quadrantPlots) return null;
-    // Find bounding box of all quadrant plots in yard coordinates
-    let minX = Infinity, minY = Infinity;
-    for (const p of quadrantPlots) {
-      minX = Math.min(minX, p.yardX);
-      minY = Math.min(minY, p.yardY);
-    }
-    // Each plot gets an offset in the combined SVG (in cell units)
-    return quadrantPlots.map(p => ({
-      plot: p,
-      offsetX: (p.yardX - minX) * 2, // *2 because 1ft = 2 cells
-      offsetY: (p.yardY - minY) * 2,
-      cellsW: p.widthFt * 2,
-      cellsH: p.heightFt * 2,
+    if (!quadrantPlots || quadrantPlots.length !== 4) return null;
+    // Lay out as a clean 2x2 grid regardless of yard rotation
+    // Sort by yard position to get NW, NE, SW, SE order
+    const sorted = [...quadrantPlots].sort((a, b) => {
+      const ay = a.yardY, by = b.yardY;
+      if (Math.abs(ay - by) > 2) return ay - by; // top row vs bottom row
+      return a.yardX - b.yardX; // left vs right within a row
+    });
+    const bedW = sorted[0].widthFt;
+    const bedH = sorted[0].heightFt;
+    const gap = 4; // feet between beds (center walking path)
+    const positions = [
+      { dx: 0, dy: 0 },                    // NW
+      { dx: bedW + gap, dy: 0 },            // NE
+      { dx: 0, dy: bedH + gap },            // SW
+      { dx: bedW + gap, dy: bedH + gap },   // SE
+    ];
+    return sorted.map((plot, i) => ({
+      plot,
+      offsetX: positions[i].dx * 2, // *2 because 1ft = 2 cells
+      offsetY: positions[i].dy * 2,
+      cellsW: plot.widthFt * 2,
+      cellsH: plot.heightFt * 2,
     }));
   }, [quadrantPlots]);
 
@@ -141,16 +150,12 @@ function PlotEditor() {
   // show their true length × width, not the axis-aligned bounding box.
   // Also compute the rotation angle and transformed outline points.
   const { plotWidthFt, plotHeightFt, plotRotationDeg, plotOutlineLocal } = useMemo(() => {
-    if (isQuadrantView && quadrantPlots) {
-      // Combined dimensions: bounding box of all quadrant plots
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const p of quadrantPlots) {
-        minX = Math.min(minX, p.yardX);
-        minY = Math.min(minY, p.yardY);
-        maxX = Math.max(maxX, p.yardX + p.widthFt);
-        maxY = Math.max(maxY, p.yardY + p.heightFt);
-      }
-      return { plotWidthFt: maxX - minX, plotHeightFt: maxY - minY, plotRotationDeg: 0, plotOutlineLocal: null };
+    if (isQuadrantView && quadrantPlots && quadrantPlots.length === 4) {
+      // Clean 2x2 grid dimensions
+      const bedW = quadrantPlots[0].widthFt;
+      const bedH = quadrantPlots[0].heightFt;
+      const gap = 4;
+      return { plotWidthFt: bedW * 2 + gap, plotHeightFt: bedH * 2 + gap, plotRotationDeg: 0, plotOutlineLocal: null };
     }
     if (!activePlot.shape || activePlot.shape.length < 3) {
       return { plotWidthFt: activePlot.widthFt, plotHeightFt: activePlot.heightFt, plotRotationDeg: 0, plotOutlineLocal: null };
@@ -600,6 +605,26 @@ function PlotEditor() {
     el.addEventListener('wheel', handler, { passive: false });
     return () => el.removeEventListener('wheel', handler);
   }, []);
+
+  // Auto-fit zoom/pan to show the full plot on mount
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !svgW || !svgH) return;
+    const rect = el.getBoundingClientRect();
+    const padding = 60;
+    const fitZoom = Math.min(
+      (rect.width - padding * 2) / svgW,
+      (rect.height - padding * 2) / svgH,
+      1.5 // don't zoom in too much for small plots
+    );
+    const z = Math.max(0.2, fitZoom);
+    setPanOffset({
+      x: (rect.width - svgW * z) / 2,
+      y: (rect.height - svgH * z) / 2,
+    });
+    setZoom(z);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.activePlotId]);
 
   // Filter palette items
   const myPlantIds = useMemo(() =>
