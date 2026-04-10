@@ -519,7 +519,18 @@ function reducer(state, action) {
           if (p.id !== plotId) return p;
           return {
             ...p,
-            elements: p.elements.map(el => el.id === id ? { ...el, x, y } : el),
+            elements: p.elements.map(el => {
+              if (el.id !== id) return el;
+              const updated = { ...el, x, y };
+              // Translate polygon vertices if they exist
+              if (el.polygon) {
+                const CELL = 24; // pixels per cell — must match GardenPlanner CELL_SIZE
+                const dx = (x - el.x) * CELL;
+                const dy = (y - el.y) * CELL;
+                updated.polygon = el.polygon.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+              }
+              return updated;
+            }),
           };
         }),
       };
