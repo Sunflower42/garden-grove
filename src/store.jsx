@@ -276,6 +276,17 @@ function reducer(state, action) {
       };
     }
 
+    case 'SET_SEEDS_STARTED': {
+      // payload: { ids: [inventoryId, ...], started: bool }
+      const idSet = new Set(action.payload.ids);
+      return {
+        ...state,
+        seedInventory: state.seedInventory.map(item =>
+          idSet.has(item.id) ? { ...item, started: action.payload.started } : item
+        ),
+      };
+    }
+
     case 'SET_YARD_SIZE':
       return { ...state, yardWidthFt: action.payload.width, yardHeightFt: action.payload.height };
     case 'SET_EDITING_PLOT':

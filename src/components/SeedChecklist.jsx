@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useStore } from '../store';
 import { getPlantById } from '../data/plants';
 import { parseLocalDate } from '../data/zones';
-import { Printer, X, CheckSquare } from 'lucide-react';
+import { Printer, X, CheckSquare, CheckCheck } from 'lucide-react';
 
 function getPlantingDates(plant, lastFrostDate, firstFrostDate) {
   const lastFrost = new Date(lastFrostDate.getTime());
@@ -192,6 +192,22 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
             </p>
           </div>
           <div className="flex items-center" data-print-hide style={{ gap: 8 }}>
+            {checklistItems.length > 0 && (() => {
+              const allStarted = checklistItems.every(i => i.started);
+              return (
+                <button
+                  onClick={() => {
+                    const ids = checklistItems.filter(i => i.invId).map(i => i.invId);
+                    dispatch({ type: 'SET_SEEDS_STARTED', payload: { ids, started: !allStarted } });
+                  }}
+                  className="flex items-center rounded-xl bg-forest/10 text-forest dark:bg-sage/15 dark:text-cream hover:bg-forest/20 dark:hover:bg-sage/25 transition-colors text-sm font-medium"
+                  style={{ padding: '10px 18px', gap: 8 }}
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  {allStarted ? 'Deselect All' : 'Select All'}
+                </button>
+              );
+            })()}
             <button
               onClick={handlePrint}
               className="flex items-center rounded-xl bg-forest/10 text-forest dark:bg-sage/15 dark:text-cream hover:bg-forest/20 dark:hover:bg-sage/25 transition-colors text-sm font-medium"
