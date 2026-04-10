@@ -15,25 +15,19 @@ import { generateRecommendations } from '../data/recommendations';
 
 const CELL_SIZE = 24; // pixels per 6 inches
 
-// Convert waypoints to a smooth SVG path using Catmull-Rom → cubic bezier
-function smoothPath(points) {
+// Build SVG path from waypoints + optional per-segment curve handles
+// handles: array of {x,y} or null per segment (length = points.length - 1)
+function buildPath(points, handles) {
   if (points.length < 2) return '';
-  if (points.length === 2) return `M ${points[0].x},${points[0].y} L ${points[1].x},${points[1].y}`;
-
   let d = `M ${points[0].x},${points[0].y}`;
   for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[Math.min(points.length - 1, i + 2)];
-
-    // Catmull-Rom to cubic bezier control points
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+    const h = handles?.[i];
+    if (h) {
+      // Quadratic bezier through the curve handle
+      d += ` Q ${h.x},${h.y} ${points[i + 1].x},${points[i + 1].y}`;
+    } else {
+      d += ` L ${points[i + 1].x},${points[i + 1].y}`;
+    }
   }
   return d;
 }
@@ -222,12 +216,21 @@ function PlotEditor() {
 
     const svg = toSVG(e.clientX, e.clientY);
 
-    // Path point dragging
+    // Path point / curve handle dragging
     if (draggingPathPoint !== null) {
       const el = activePlot.elements.find(el => el.id === selectedId);
       if (el?.drawnPath) {
-        const newPoints = el.drawnPath.points.map((pt, i) => i === draggingPathPoint ? { x: svg.x, y: svg.y } : pt);
-        dispatch({ type: 'UPDATE_DRAWN_PATH', payload: { plotId: activePlot.id, id: el.id, points: newPoints } });
+        if (draggingPathPoint >= 0) {
+          // Dragging a waypoint
+          const newPoints = el.drawnPath.points.map((pt, i) => i === draggingPathPoint ? { x: svg.x, y: svg.y } : pt);
+          dispatch({ type: 'UPDATE_DRAWN_PATH', payload: { plotId: activePlot.id, id: el.id, points: newPoints } });
+        } else {
+          // Dragging a curve handle (negative index: -(segmentIndex + 1))
+          const segIdx = -(draggingPathPoint + 1);
+          const handles = [...(el.drawnPath.handles || new Array(el.drawnPath.points.length - 1).fill(null))];
+          handles[segIdx] = { x: svg.x, y: svg.y };
+          dispatch({ type: 'UPDATE_DRAWN_PATH', payload: { plotId: activePlot.id, id: el.id, handles } });
+        }
       }
       return;
     }
@@ -1078,7 +1081,8 @@ function PlotEditor() {
                 if (elem.drawnPath) {
                   const dp = elem.drawnPath;
                   const isSelected = selectedId === elem.id;
-                  const d = smoothPath(dp.points);
+                  const handles = dp.handles || new Array(dp.points.length - 1).fill(null);
+                  const d = buildPath(dp.points, handles);
                   if (!d) return null;
                   return (
                     <g key={elem.id}
@@ -1102,20 +1106,53 @@ function PlotEditor() {
                       {/* Invisible wider hit area for easier clicking */}
                       <path d={d} fill="none" stroke="transparent" strokeWidth={Math.max(20, dp.pathWidth * CELL_SIZE / 6 + 10)}
                         strokeLinecap="round" strokeLinejoin="round" />
-                      {/* Waypoint editing when selected */}
-                      {isSelected && !movingItem && dp.points.map((pt, i) => (
-                        <circle
-                          key={`wp-${i}`}
-                          cx={pt.x} cy={pt.y} r={5}
-                          fill="#C17644" stroke="white" strokeWidth={1.5}
-                          style={{ cursor: 'move' }}
-                          onMouseDown={(e) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            setDraggingPathPoint(i);
-                          }}
-                        />
-                      ))}
+                      {/* Waypoint + curve handle editing when selected */}
+                      {isSelected && !movingItem && (
+                        <>
+                          {/* Curve handles — drag midpoint to bend a segment */}
+                          {dp.points.slice(0, -1).map((pt, i) => {
+                            const next = dp.points[i + 1];
+                            const h = handles[i];
+                            const mx = h ? h.x : (pt.x + next.x) / 2;
+                            const my = h ? h.y : (pt.y + next.y) / 2;
+                            return (
+                              <g key={`ch-${i}`}>
+                                {/* Line from midpoint to handle if curved */}
+                                {h && (
+                                  <line x1={(pt.x + next.x) / 2} y1={(pt.y + next.y) / 2} x2={h.x} y2={h.y}
+                                    stroke="#C17644" strokeWidth={0.8} opacity={0.4} strokeDasharray="3 2" />
+                                )}
+                                <circle
+                                  cx={mx} cy={my} r={h ? 4.5 : 3.5}
+                                  fill={h ? '#E8883A' : 'white'} stroke="#C17644" strokeWidth={1.5}
+                                  opacity={h ? 0.9 : 0.6}
+                                  style={{ cursor: 'move' }}
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    // Use negative indices to indicate curve handles
+                                    setDraggingPathPoint(-(i + 1));
+                                  }}
+                                />
+                              </g>
+                            );
+                          })}
+                          {/* Waypoints */}
+                          {dp.points.map((pt, i) => (
+                            <circle
+                              key={`wp-${i}`}
+                              cx={pt.x} cy={pt.y} r={5}
+                              fill="#C17644" stroke="white" strokeWidth={1.5}
+                              style={{ cursor: 'move' }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                setDraggingPathPoint(i);
+                              }}
+                            />
+                          ))}
+                        </>
+                      )}
                     </g>
                   );
                 }
@@ -1276,10 +1313,10 @@ function PlotEditor() {
                 <g style={{ pointerEvents: 'none' }}>
                   {drawingPath.points.length >= 2 && (
                     <>
-                      <path d={smoothPath(drawingPath.points)} fill="none"
+                      <path d={buildPath(drawingPath.points)} fill="none"
                         stroke={drawingPath.borderColor} strokeWidth={drawingPath.pathWidth * CELL_SIZE / 6 + 2}
                         strokeLinecap="round" strokeLinejoin="round" opacity={0.4} />
-                      <path d={smoothPath(drawingPath.points)} fill="none"
+                      <path d={buildPath(drawingPath.points)} fill="none"
                         stroke={drawingPath.color} strokeWidth={drawingPath.pathWidth * CELL_SIZE / 6}
                         strokeLinecap="round" strokeLinejoin="round" opacity={0.6} />
                     </>

@@ -523,14 +523,14 @@ function reducer(state, action) {
               id: `path-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
               elementId: 'drawn-path',
               x: 0, y: 0, width: 0, height: 0,
-              drawnPath: { points, pathWidth: pathWidth || 36, color: color || '#C4B69A', borderColor: borderColor || '#A89878' },
+              drawnPath: { points, handles: new Array(points.length - 1).fill(null), pathWidth: pathWidth || 36, color: color || '#C4B69A', borderColor: borderColor || '#A89878' },
             }],
           };
         }),
       };
     }
     case 'UPDATE_DRAWN_PATH': {
-      const { plotId, id, points } = action.payload;
+      const { plotId, id, points, handles } = action.payload;
       return {
         ...state,
         plots: state.plots.map(p => {
@@ -539,7 +539,10 @@ function reducer(state, action) {
             ...p,
             elements: p.elements.map(el => {
               if (el.id !== id || !el.drawnPath) return el;
-              return { ...el, drawnPath: { ...el.drawnPath, points } };
+              const updated = { ...el.drawnPath };
+              if (points) updated.points = points;
+              if (handles !== undefined) updated.handles = handles;
+              return { ...el, drawnPath: updated };
             }),
           };
         }),
@@ -568,7 +571,11 @@ function reducer(state, action) {
                 const CELL = 24;
                 const dx = (x - el.x) * CELL;
                 const dy = (y - el.y) * CELL;
-                updated.drawnPath = { ...el.drawnPath, points: el.drawnPath.points.map(pt => ({ x: pt.x + dx, y: pt.y + dy })) };
+                updated.drawnPath = {
+                  ...el.drawnPath,
+                  points: el.drawnPath.points.map(pt => ({ x: pt.x + dx, y: pt.y + dy })),
+                  handles: el.drawnPath.handles?.map(h => h ? { x: h.x + dx, y: h.y + dy } : null),
+                };
               }
               return updated;
             }),
