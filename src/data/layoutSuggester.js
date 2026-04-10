@@ -1,8 +1,8 @@
 import { getPlantById } from './plants';
 
-// Generate a suggested layout for plants within a plot
-// Places tallest plants on the north side (top), groups companions,
-// separates conflicts, and respects spacing requirements.
+// Generate a suggested layout that fills the bed based on plant spacing.
+// Groups companions together, puts tall plants north, and fills each
+// plant type to capacity rather than placing just one.
 
 export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
   if (!plantIds.length || !plotWidthFt || !plotHeightFt) return [];
@@ -16,10 +16,17 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
   const gridW = plotWidthFt * 2;
   const gridH = plotHeightFt * 2;
 
-  // Sort plants: tallest first (they go to the north/top side so they don't shade others)
-  const sorted = [...plants].sort((a, b) => (b.heightIn || 24) - (a.heightIn || 24));
+  // Spacing in cells (6 inches each)
+  const spacingCells = (plant) => Math.max(2, Math.ceil((plant.spacingIn || 12) / 6));
 
-  // Build companion/conflict maps for scoring
+  // Sort plants: tallest first (north/top), then by spacing (larger spacing first to place big ones)
+  const sorted = [...plants].sort((a, b) => {
+    const ha = a.heightIn || 24, hb = b.heightIn || 24;
+    if (Math.abs(ha - hb) > 12) return hb - ha; // tall plants first
+    return spacingCells(b) - spacingCells(a); // then widest spacing first
+  });
+
+  // Build companion/conflict maps
   const companionSet = new Map();
   const avoidSet = new Map();
   for (const p of plants) {
@@ -27,18 +34,12 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
     avoidSet.set(p.id, new Set(p.avoid || []));
   }
 
-  // Spacing in cells (6 inches each)
-  const spacingCells = (plant) => Math.max(1, Math.ceil((plant.spacingIn || 12) / 6));
-
-  // Placement results
-  const placements = [];
-  // Occupied cells grid for collision detection
+  // Occupied cells grid
   const occupied = Array.from({ length: gridH }, () => new Array(gridW).fill(null));
 
-  // Mark cells as occupied
-  const markOccupied = (cx, cy, radius, plantId) => {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
+  const markOccupied = (cx, cy, halfSpacing, plantId) => {
+    for (let dy = -halfSpacing; dy <= halfSpacing; dy++) {
+      for (let dx = -halfSpacing; dx <= halfSpacing; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
           occupied[ny][nx] = plantId;
@@ -47,10 +48,9 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
     }
   };
 
-  // Check if a position is clear (respecting spacing)
-  const isClear = (cx, cy, radius) => {
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
+  const isClear = (cx, cy, halfSpacing) => {
+    for (let dy = -halfSpacing; dy <= halfSpacing; dy++) {
+      for (let dx = -halfSpacing; dx <= halfSpacing; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) return false;
         if (occupied[ny][nx] !== null) return false;
@@ -59,64 +59,58 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
     return true;
   };
 
-  // Score a position based on companion proximity and conflict avoidance
-  const scorePosition = (cx, cy, plantId) => {
-    let score = 0;
-    const companions = companionSet.get(plantId) || new Set();
-    const avoids = avoidSet.get(plantId) || new Set();
-    const checkRadius = 8; // cells to check around
-
-    for (let dy = -checkRadius; dy <= checkRadius; dy++) {
-      for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+  // Check neighbor compatibility — avoid placing next to conflicting plants
+  const hasConflictNearby = (cx, cy, plantId, checkDist) => {
+    const avoids = avoidSet.get(plantId);
+    if (!avoids || avoids.size === 0) return false;
+    for (let dy = -checkDist; dy <= checkDist; dy++) {
+      for (let dx = -checkDist; dx <= checkDist; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) continue;
-        const neighbor = occupied[ny][nx];
-        if (!neighbor) continue;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (companions.has(neighbor)) score += 10 / (dist + 1); // reward proximity to companions
-        if (avoids.has(neighbor)) score -= 20 / (dist + 1); // penalize proximity to conflicts
+        if (occupied[ny][nx] && avoids.has(occupied[ny][nx])) return true;
       }
     }
-
-    // Slight preference for centering horizontally
-    const centerDist = Math.abs(cx - gridW / 2) / gridW;
-    score -= centerDist * 2;
-
-    return score;
+    return false;
   };
 
-  // Place each plant
-  for (const plant of sorted) {
+  const placements = [];
+
+  // Divide the bed into horizontal bands based on plant count
+  // Tall plants get the top bands, short plants the bottom
+  const numPlants = sorted.length;
+  const bandHeight = Math.max(2, Math.floor(gridH / numPlants));
+
+  for (let pi = 0; pi < sorted.length; pi++) {
+    const plant = sorted[pi];
     const spacing = spacingCells(plant);
     const halfSpacing = Math.ceil(spacing / 2);
 
-    let bestPos = null;
-    let bestScore = -Infinity;
+    // This plant's preferred vertical band (tall at top, short at bottom)
+    const bandTop = Math.min(gridH - spacing, pi * bandHeight);
+    const bandBottom = Math.min(gridH, bandTop + Math.max(bandHeight, spacing * 2));
 
-    // Scan the grid for valid positions, stepping by spacing
-    for (let y = halfSpacing; y < gridH - halfSpacing; y += Math.max(1, Math.floor(spacing / 2))) {
-      for (let x = halfSpacing; x < gridW - halfSpacing; x += Math.max(1, Math.floor(spacing / 2))) {
+    // Fill the band with this plant at proper spacing
+    for (let y = bandTop + halfSpacing; y <= bandBottom - halfSpacing; y += spacing) {
+      for (let x = halfSpacing; x <= gridW - halfSpacing; x += spacing) {
         if (!isClear(x, y, halfSpacing)) continue;
+        if (hasConflictNearby(x, y, plant.id, spacing + 2)) continue;
 
-        const score = scorePosition(x, y, plant.id);
-        // Add height-based row preference: tall plants toward top (north)
-        const rowScore = (plant.heightIn > 36) ? -y * 0.5 : y * 0.3;
-        const totalScore = score + rowScore;
-
-        if (totalScore > bestScore) {
-          bestScore = totalScore;
-          bestPos = { x, y };
-        }
+        placements.push({ plantId: plant.id, x, y });
+        markOccupied(x, y, halfSpacing, plant.id);
       }
     }
 
-    if (bestPos) {
-      placements.push({
-        plantId: plant.id,
-        x: bestPos.x,
-        y: bestPos.y,
-      });
-      markOccupied(bestPos.x, bestPos.y, halfSpacing, plant.id);
+    // If the band was too constrained, try filling remaining space anywhere
+    if (placements.filter(p => p.plantId === plant.id).length === 0) {
+      for (let y = halfSpacing; y <= gridH - halfSpacing; y += spacing) {
+        for (let x = halfSpacing; x <= gridW - halfSpacing; x += spacing) {
+          if (!isClear(x, y, halfSpacing)) continue;
+          if (hasConflictNearby(x, y, plant.id, spacing + 2)) continue;
+
+          placements.push({ plantId: plant.id, x, y });
+          markOccupied(x, y, halfSpacing, plant.id);
+        }
+      }
     }
   }
 
