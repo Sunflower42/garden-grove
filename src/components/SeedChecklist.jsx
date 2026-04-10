@@ -222,46 +222,73 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
               </p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* Select All row */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {/* Group by action type */}
               {(() => {
-                const allStarted = checklistItems.every(i => i.started);
-                const someStarted = checklistItems.some(i => i.started);
-                return (
-                  <div
-                    className="flex items-center rounded-xl border border-sage/20 dark:border-sage-dark/20 bg-sage/5 dark:bg-sage-dark/5"
-                    style={{ padding: '10px 18px', gap: 14 }}
-                  >
-                    <button
-                      onClick={() => {
-                        const ids = checklistItems.filter(i => i.invId).map(i => i.invId);
-                        dispatch({ type: 'SET_SEEDS_STARTED', payload: { ids, started: !allStarted } });
-                      }}
-                      className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
-                        allStarted
-                          ? 'bg-forest border-forest text-cream'
-                          : someStarted
-                          ? 'border-forest dark:border-sage'
-                          : 'border-sage/30 dark:border-sage-dark/40 hover:border-forest/50'
-                      }`}
-                    >
-                      {allStarted && (
-                        <svg viewBox="0 0 12 12" className="w-3 h-3"><path d="M2 6l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                      )}
-                      {someStarted && !allStarted && (
-                        <div className="w-2.5 h-0.5 bg-forest dark:bg-sage rounded-full"></div>
-                      )}
-                    </button>
-                    <span className="text-sm font-medium text-sage-dark/70 dark:text-sage/60">
-                      {allStarted ? 'Deselect all' : 'Select all'}
-                    </span>
-                  </div>
-                );
-              })()}
-              {checklistItems.map((item, i) => (
+                const groups = {};
+                const groupOrder = ['Start indoors', 'Direct sow', 'Plant outdoors'];
+                for (const item of checklistItems) {
+                  if (!groups[item.action]) groups[item.action] = [];
+                  groups[item.action].push(item);
+                }
+                const sortedKeys = Object.keys(groups).sort((a, b) => groupOrder.indexOf(a) - groupOrder.indexOf(b));
+
+                return sortedKeys.map(action => {
+                  const groupItems = groups[action];
+                  const allStarted = groupItems.every(i => i.started);
+                  const someStarted = groupItems.some(i => i.started);
+                  const isPurple = action === 'Start indoors';
+
+                  return (
+                    <div key={action} style={{ marginBottom: 16 }}>
+                      {/* Group header with select-all checkbox */}
+                      <div
+                        className={`flex items-center rounded-t-xl border ${
+                          isPurple
+                            ? 'border-bloom-purple/15 bg-bloom-purple/5 dark:bg-bloom-purple/8'
+                            : 'border-sage/20 bg-sage/5 dark:bg-sage-dark/5'
+                        }`}
+                        style={{ padding: '10px 18px', gap: 14 }}
+                      >
+                        <button
+                          onClick={() => {
+                            const ids = groupItems.filter(i => i.invId).map(i => i.invId);
+                            dispatch({ type: 'SET_SEEDS_STARTED', payload: { ids, started: !allStarted } });
+                          }}
+                          className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+                            allStarted
+                              ? 'bg-forest border-forest text-cream'
+                              : someStarted
+                              ? 'border-forest dark:border-sage'
+                              : 'border-sage/30 dark:border-sage-dark/40 hover:border-forest/50'
+                          }`}
+                        >
+                          {allStarted && (
+                            <svg viewBox="0 0 12 12" className="w-3 h-3"><path d="M2 6l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          )}
+                          {someStarted && !allStarted && (
+                            <div className="w-2.5 h-0.5 bg-forest dark:bg-sage rounded-full"></div>
+                          )}
+                        </button>
+                        <span className={`text-sm font-semibold ${
+                          isPurple
+                            ? 'text-bloom-purple'
+                            : 'text-sage-dark/70 dark:text-sage/60'
+                        }`}>
+                          {action}
+                        </span>
+                        <span className="text-[11px] text-sage-dark/40 dark:text-sage/30">
+                          {groupItems.filter(i => i.started).length}/{groupItems.length}
+                        </span>
+                      </div>
+                      {/* Group items */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                        {groupItems.map((item, i) => (
                 <div
                   key={`${item.plant.id}-${item.action}-${i}`}
-                  className="flex items-start rounded-xl border border-sage/10 dark:border-sage-dark/15"
+                  className={`flex items-start border-x border-b border-sage/10 dark:border-sage-dark/15 ${
+                    i === groupItems.length - 1 ? 'rounded-b-xl' : ''
+                  }`}
                   style={{ padding: '14px 18px', gap: 14 }}
                 >
                   {/* Checkbox */}
@@ -317,7 +344,12 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
                     </span>
                   )}
                 </div>
-              ))}
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           )}
 
