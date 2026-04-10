@@ -244,12 +244,16 @@ function PlotEditor() {
   // ─── Mouse Handlers ───
 
   const handleMouseDown = useCallback((e) => {
-    // Middle mouse = pan
-    if (e.button === 1) {
-      e.preventDefault();
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
-      return;
+    // Middle mouse or left-click on empty space (when not placing) = pan
+    if (e.button === 1 || (e.button === 0 && !placingItem && !drawingPath)) {
+      const target = e.target;
+      const isEmptySpace = e.button === 1 || target === svgRef.current || target.classList?.contains('garden-bg') || target.tagName === 'line';
+      if (isEmptySpace) {
+        e.preventDefault();
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+        return;
+      }
     }
     // Right click = cancel or delete vertex
     if (e.button === 2) {
@@ -276,7 +280,7 @@ function PlotEditor() {
       setResizing(null);
       return;
     }
-  }, [panOffset, editingElementShape, activePlot, toSVG, dispatch]);
+  }, [panOffset, editingElementShape, activePlot, toSVG, dispatch, placingItem, drawingPath]);
 
   const handleMouseMove = useCallback((e) => {
     if (isPanning) {
@@ -342,7 +346,7 @@ function PlotEditor() {
   }, [isPanning, panStart, resizing, movingItem, placingItem, draggingVertex, draggingPathPoint, selectedId, toSVG, zoom, activePlot, dispatch]);
 
   const handleMouseUp = useCallback((e) => {
-    if (e.button === 1) {
+    if (isPanning) {
       setIsPanning(false);
       return;
     }
@@ -393,7 +397,7 @@ function PlotEditor() {
       setMovePos(null);
       return;
     }
-  }, [resizing, movingItem, movePos, draggingVertex, draggingPathPoint, dispatch, activePlot?.id]);
+  }, [isPanning, resizing, movingItem, movePos, draggingVertex, draggingPathPoint, findPlotForItem, quadrantLayout, dispatch, activePlot?.id]);
 
   // Double-click detection for path drawing
   const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
@@ -608,21 +612,25 @@ function PlotEditor() {
 
   // Auto-fit zoom/pan to show the full plot on mount
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !svgW || !svgH) return;
-    const rect = el.getBoundingClientRect();
-    const padding = 60;
-    const fitZoom = Math.min(
-      (rect.width - padding * 2) / svgW,
-      (rect.height - padding * 2) / svgH,
-      1.5 // don't zoom in too much for small plots
-    );
-    const z = Math.max(0.2, fitZoom);
-    setPanOffset({
-      x: (rect.width - svgW * z) / 2,
-      y: (rect.height - svgH * z) / 2,
-    });
-    setZoom(z);
+    // Delay slightly to ensure container is fully laid out
+    const timer = setTimeout(() => {
+      const el = containerRef.current;
+      if (!el || !svgW || !svgH) return;
+      const rect = el.getBoundingClientRect();
+      const padding = 80;
+      const fitZoom = Math.min(
+        (rect.width - padding * 2) / svgW,
+        (rect.height - padding * 2) / svgH,
+        1.5
+      );
+      const z = Math.max(0.15, fitZoom);
+      setPanOffset({
+        x: (rect.width - svgW * z) / 2,
+        y: (rect.height - svgH * z) / 2 + 20,
+      });
+      setZoom(z);
+    }, 50);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.activePlotId]);
 
@@ -1031,7 +1039,15 @@ function PlotEditor() {
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => { setZoom(1); setPanOffset({ x: 40, y: 40 }); }}
+                onClick={() => {
+                  const el = containerRef.current;
+                  if (!el) return;
+                  const rect = el.getBoundingClientRect();
+                  const padding = 80;
+                  const z = Math.max(0.15, Math.min((rect.width - padding * 2) / svgW, (rect.height - padding * 2) / svgH, 1.5));
+                  setZoom(z);
+                  setPanOffset({ x: (rect.width - svgW * z) / 2, y: (rect.height - svgH * z) / 2 + 20 });
+                }}
                 style={{ padding: 8 }}
                 className="rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors"
                 title="Reset view"
@@ -1237,7 +1253,7 @@ function PlotEditor() {
             height="100%"
             onClick={handleCanvasClick}
             style={{
-              cursor: placingItem ? 'copy' : isPanning ? 'grabbing' : movingItem ? 'grabbing' : 'default',
+              cursor: placingItem ? 'copy' : isPanning ? 'grabbing' : movingItem ? 'grabbing' : drawingPath ? 'crosshair' : 'grab',
             }}
           >
             <PlantFilters />
