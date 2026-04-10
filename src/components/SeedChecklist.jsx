@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useStore } from '../store';
 import { getPlantById } from '../data/plants';
 import { parseLocalDate } from '../data/zones';
-import { Printer, X, CheckSquare, CheckCheck } from 'lucide-react';
+import { Printer, X, CheckSquare } from 'lucide-react';
 
 function getPlantingDates(plant, lastFrostDate, firstFrostDate) {
   const lastFrost = new Date(lastFrostDate.getTime());
@@ -192,22 +192,6 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
             </p>
           </div>
           <div className="flex items-center" data-print-hide style={{ gap: 8 }}>
-            {checklistItems.length > 0 && (() => {
-              const allStarted = checklistItems.every(i => i.started);
-              return (
-                <button
-                  onClick={() => {
-                    const ids = checklistItems.filter(i => i.invId).map(i => i.invId);
-                    dispatch({ type: 'SET_SEEDS_STARTED', payload: { ids, started: !allStarted } });
-                  }}
-                  className="flex items-center rounded-xl bg-forest/10 text-forest dark:bg-sage/15 dark:text-cream hover:bg-forest/20 dark:hover:bg-sage/25 transition-colors text-sm font-medium"
-                  style={{ padding: '10px 18px', gap: 8 }}
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  {allStarted ? 'Deselect All' : 'Select All'}
-                </button>
-              );
-            })()}
             <button
               onClick={handlePrint}
               className="flex items-center rounded-xl bg-forest/10 text-forest dark:bg-sage/15 dark:text-cream hover:bg-forest/20 dark:hover:bg-sage/25 transition-colors text-sm font-medium"
@@ -239,6 +223,41 @@ ${checklistItems.length > 0 ? `<p class="footer">Garden Grove · ${checklistItem
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Select All row */}
+              {(() => {
+                const allStarted = checklistItems.every(i => i.started);
+                const someStarted = checklistItems.some(i => i.started);
+                return (
+                  <div
+                    className="flex items-center rounded-xl border border-sage/20 dark:border-sage-dark/20 bg-sage/5 dark:bg-sage-dark/5"
+                    style={{ padding: '10px 18px', gap: 14 }}
+                  >
+                    <button
+                      onClick={() => {
+                        const ids = checklistItems.filter(i => i.invId).map(i => i.invId);
+                        dispatch({ type: 'SET_SEEDS_STARTED', payload: { ids, started: !allStarted } });
+                      }}
+                      className={`w-5 h-5 rounded border-2 shrink-0 flex items-center justify-center transition-all ${
+                        allStarted
+                          ? 'bg-forest border-forest text-cream'
+                          : someStarted
+                          ? 'border-forest dark:border-sage'
+                          : 'border-sage/30 dark:border-sage-dark/40 hover:border-forest/50'
+                      }`}
+                    >
+                      {allStarted && (
+                        <svg viewBox="0 0 12 12" className="w-3 h-3"><path d="M2 6l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      )}
+                      {someStarted && !allStarted && (
+                        <div className="w-2.5 h-0.5 bg-forest dark:bg-sage rounded-full"></div>
+                      )}
+                    </button>
+                    <span className="text-sm font-medium text-sage-dark/70 dark:text-sage/60">
+                      {allStarted ? 'Deselect all' : 'Select all'}
+                    </span>
+                  </div>
+                );
+              })()}
               {checklistItems.map((item, i) => (
                 <div
                   key={`${item.plant.id}-${item.action}-${i}`}
