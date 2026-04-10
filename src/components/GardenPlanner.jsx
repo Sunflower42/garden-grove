@@ -1046,7 +1046,7 @@ function PlotEditor() {
                 onClick={() => {
                   const plantIds = state.seedInventory.map(i => i.plantId);
                   if (isQuadrantView && quadrantLayout) {
-                    // Distribute plants across all 4 beds
+                    // Group plants by category for themed quadrant beds
                     const allPlots = quadrantLayout.map(q => q.plot);
                     const totalPlants = allPlots.reduce((sum, p) => sum + p.plants.length, 0);
                     const confirmed = totalPlants === 0 || confirm(`This will replace ${totalPlants} existing plants across all beds. Continue?`);
@@ -1057,13 +1057,40 @@ function PlotEditor() {
                         dispatch({ type: 'REMOVE_PLANT', payload: { plotId: plot.id, id: p.id } });
                       }
                     }
-                    // Generate layout per bed
+                    // Group unique plant IDs by category
+                    const uniqueIds = [...new Set(plantIds)];
+                    const categoryGroups = {};
+                    for (const id of uniqueIds) {
+                      const plant = getPlantById(id);
+                      if (!plant) continue;
+                      const cat = plant.category || 'vegetable';
+                      if (!categoryGroups[cat]) categoryGroups[cat] = [];
+                      categoryGroups[cat].push(id);
+                    }
+                    // Sort categories by size (largest group gets first bed)
+                    // and assign nice bed names
+                    const catLabels = { vegetable: 'Vegetables', herb: 'Herbs', flower: 'Flowers', fruit: 'Fruits' };
+                    const sortedCats = Object.entries(categoryGroups)
+                      .sort((a, b) => b[1].length - a[1].length);
+                    // If fewer than 4 categories, split the largest group across extra beds
+                    while (sortedCats.length < 4 && sortedCats[0][1].length > 1) {
+                      const [cat, ids] = sortedCats[0];
+                      const half = Math.ceil(ids.length / 2);
+                      sortedCats[0] = [cat, ids.slice(0, half)];
+                      sortedCats.push([cat + '-2', ids.slice(half)]);
+                      sortedCats.sort((a, b) => b[1].length - a[1].length);
+                    }
+                    // Generate layout per bed with themed plants
                     const bedW = quadrantLayout[0].cellsW / 2; // in feet
                     const bedH = quadrantLayout[0].cellsH / 2;
-                    const perBed = Math.ceil(plantIds.length / 4);
-                    for (let i = 0; i < 4 && i * perBed < plantIds.length; i++) {
-                      const bedPlantIds = plantIds.slice(i * perBed, (i + 1) * perBed);
+                    for (let i = 0; i < Math.min(4, sortedCats.length); i++) {
+                      const [cat, bedPlantIds] = sortedCats[i];
                       const layout = suggestLayout(bedPlantIds, bedW, bedH);
+                      // Update bed name to reflect theme
+                      const baseCat = cat.replace(/-\d+$/, '');
+                      const label = catLabels[baseCat] || baseCat;
+                      const suffix = cat.includes('-') ? ' ' + cat.split('-')[1] : '';
+                      dispatch({ type: 'UPDATE_PLOT_NAME', payload: { id: allPlots[i].id, name: label + suffix } });
                       for (const placement of layout) {
                         dispatch({
                           type: 'PLACE_PLANT',

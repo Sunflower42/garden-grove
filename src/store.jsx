@@ -373,6 +373,13 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'UPDATE_PLOT_NAME': {
+      const { id, name } = action.payload;
+      return {
+        ...state,
+        plots: state.plots.map(p => p.id === id ? { ...p, name } : p),
+      };
+    }
     case 'ADD_PLOT': {
       const w = action.payload.widthFt || 10;
       const h = action.payload.heightFt || 8;
