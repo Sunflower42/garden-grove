@@ -625,12 +625,12 @@ export default function SeedInventory() {
     setWebLookupLoading(true);
     setWebLookupResult(null);
     try {
-      const query = `${quickVariety} ${quickPlant.name} variety days to maturity growing info`;
+      const query = `${quickPlant.name} "${quickVariety}" seed variety days to maturity gardening`;
       const res = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&origin=*&srlimit=1`);
       const wiki = await res.json();
 
       // Also try a more targeted gardening search via DuckDuckGo instant answer
-      const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(`${quickVariety} ${quickPlant.name} seed variety`)}&format=json&no_redirect=1`);
+      const ddgRes = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(`${quickPlant.name} "${quickVariety}" seed variety gardening`)}&format=json&no_redirect=1`);
       const ddg = await ddgRes.json();
 
       // Parse what we can from the results

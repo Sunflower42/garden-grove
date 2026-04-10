@@ -66,7 +66,7 @@ const VARIETIES = {
     'spacemaster': { daysToMaturity: 60, notes: 'Compact bush type. Perfect for containers. Full-size cukes on small plants.' },
     'straight eight': { daysToMaturity: 60, notes: 'Heirloom. Uniform 8" fruits. Good all-around slicer.' },
   },
-  'squash-zucchini': {
+  'zucchini': {
     'black beauty': { daysToMaturity: 50, notes: 'Classic dark green zucchini. Very productive. Pick young for best flavor.' },
     'golden': { daysToMaturity: 50, notes: 'Bright yellow zucchini. Same great taste, beautiful color.' },
     'costata romanesco': { daysToMaturity: 55, notes: 'Italian heirloom. Ribbed, nutty flavor. Best when picked at 6-8".' },
