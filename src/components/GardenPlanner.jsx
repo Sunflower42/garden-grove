@@ -1073,19 +1073,28 @@ function PlotEditor() {
                         dispatch({ type: 'REMOVE_PLANT', payload: { plotId: plot.id, id: p.id } });
                       }
                     }
-                    // Group unique plant IDs by category
+                    // Group unique plant IDs by category, routing companion
+                    // flowers to the veggie bed if they companion with veggies
                     const uniqueIds = [...new Set(plantIds)];
                     const categoryGroups = {};
+                    const vegIds = new Set(uniqueIds.filter(id => {
+                      const p = getPlantById(id);
+                      return p && (p.category === 'vegetable' || p.category === 'fruit');
+                    }));
                     for (const id of uniqueIds) {
                       const plant = getPlantById(id);
                       if (!plant) continue;
-                      const cat = plant.category || 'vegetable';
+                      let cat = plant.category || 'vegetable';
+                      // If this flower companions with veggies in our inventory, group it with veggies
+                      if (cat === 'flower' && plant.companions?.some(cId => vegIds.has(cId))) {
+                        cat = 'vegetable';
+                      }
                       if (!categoryGroups[cat]) categoryGroups[cat] = [];
                       categoryGroups[cat].push(id);
                     }
                     // Sort categories by size (largest group gets first bed)
                     // and assign nice bed names
-                    const catLabels = { vegetable: 'Vegetables', herb: 'Herbs', flower: 'Flowers', fruit: 'Fruits' };
+                    const catLabels = { vegetable: 'Vegetables', herb: 'Herbs', flower: 'Cutting Flowers', fruit: 'Fruits' };
                     const sortedCats = Object.entries(categoryGroups)
                       .sort((a, b) => b[1].length - a[1].length);
                     // If fewer than 4 categories, split the largest group across extra beds
