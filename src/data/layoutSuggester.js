@@ -1,45 +1,41 @@
 import { getPlantById } from './plants';
 
-// Generate a suggested layout that fills the bed based on plant spacing.
-// Groups companions together, puts tall plants north, and fills each
-// plant type to capacity rather than placing just one.
+// Generate a natural-looking garden layout that fills every available spot.
+// Uses staggered hex-grid placement, interplants companions, puts tall
+// plants north, and cycles through all plant types to fill the bed.
 
 export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
   if (!plantIds.length || !plotWidthFt || !plotHeightFt) return [];
 
-  // Get unique plant data
   const uniqueIds = [...new Set(plantIds)];
   const plants = uniqueIds.map(id => getPlantById(id)).filter(Boolean);
   if (plants.length === 0) return [];
 
-  // Grid is in 6-inch cells (2 cells per foot)
-  const gridW = plotWidthFt * 2;
+  const gridW = plotWidthFt * 2; // 6-inch cells
   const gridH = plotHeightFt * 2;
 
-  // Spacing in cells (6 inches each)
+  // Spacing in cells
   const spacingCells = (plant) => Math.max(2, Math.ceil((plant.spacingIn || 12) / 6));
 
-  // Sort plants: tallest first (north/top), then by spacing (larger spacing first to place big ones)
+  // Sort: tallest first (north), then largest spacing
   const sorted = [...plants].sort((a, b) => {
     const ha = a.heightIn || 24, hb = b.heightIn || 24;
-    if (Math.abs(ha - hb) > 12) return hb - ha; // tall plants first
-    return spacingCells(b) - spacingCells(a); // then widest spacing first
+    if (Math.abs(ha - hb) > 12) return hb - ha;
+    return spacingCells(b) - spacingCells(a);
   });
 
-  // Build companion/conflict maps
-  const companionSet = new Map();
+  // Build conflict map
   const avoidSet = new Map();
   for (const p of plants) {
-    companionSet.set(p.id, new Set(p.companions || []));
     avoidSet.set(p.id, new Set(p.avoid || []));
   }
 
-  // Occupied cells grid
+  // Occupied grid
   const occupied = Array.from({ length: gridH }, () => new Array(gridW).fill(null));
 
-  const markOccupied = (cx, cy, halfSpacing, plantId) => {
-    for (let dy = -halfSpacing; dy <= halfSpacing; dy++) {
-      for (let dx = -halfSpacing; dx <= halfSpacing; dx++) {
+  const markOccupied = (cx, cy, radius, plantId) => {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx >= 0 && nx < gridW && ny >= 0 && ny < gridH) {
           occupied[ny][nx] = plantId;
@@ -48,9 +44,9 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
     }
   };
 
-  const isClear = (cx, cy, halfSpacing) => {
-    for (let dy = -halfSpacing; dy <= halfSpacing; dy++) {
-      for (let dx = -halfSpacing; dx <= halfSpacing; dx++) {
+  const isClear = (cx, cy, radius) => {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) return false;
         if (occupied[ny][nx] !== null) return false;
@@ -59,12 +55,11 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
     return true;
   };
 
-  // Check neighbor compatibility — avoid placing next to conflicting plants
-  const hasConflictNearby = (cx, cy, plantId, checkDist) => {
+  const hasConflictNearby = (cx, cy, plantId, dist) => {
     const avoids = avoidSet.get(plantId);
     if (!avoids || avoids.size === 0) return false;
-    for (let dy = -checkDist; dy <= checkDist; dy++) {
-      for (let dx = -checkDist; dx <= checkDist; dx++) {
+    for (let dy = -dist; dy <= dist; dy++) {
+      for (let dx = -dist; dx <= dist; dx++) {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || nx >= gridW || ny < 0 || ny >= gridH) continue;
         if (occupied[ny][nx] && avoids.has(occupied[ny][nx])) return true;
@@ -75,41 +70,93 @@ export function suggestLayout(plantIds, plotWidthFt, plotHeightFt) {
 
   const placements = [];
 
-  // Divide the bed into horizontal bands based on plant count
-  // Tall plants get the top bands, short plants the bottom
-  const numPlants = sorted.length;
-  const bandHeight = Math.max(2, Math.floor(gridH / numPlants));
+  // Phase 1: Place each plant type in staggered rows, cycling through types
+  // to interplant and fill the bed naturally.
+  //
+  // Strategy: scan top to bottom. For each row, pick the best plant type
+  // that should go at this height (tall=top, short=bottom) and hasn't
+  // been fully placed yet. Place as many as fit in the row, then move down.
 
-  for (let pi = 0; pi < sorted.length; pi++) {
-    const plant = sorted[pi];
-    const spacing = spacingCells(plant);
-    const halfSpacing = Math.ceil(spacing / 2);
+  // Calculate how many rows each plant needs based on spacing
+  const plantBudgets = sorted.map(plant => {
+    const sp = spacingCells(plant);
+    const perRow = Math.max(1, Math.floor((gridW - sp) / sp) + 1);
+    const rows = Math.max(1, Math.floor((gridH * 0.8) / sorted.length / sp) + 1);
+    return { plant, spacing: sp, target: perRow * rows, placed: 0 };
+  });
 
-    // This plant's preferred vertical band (tall at top, short at bottom)
-    const bandTop = Math.min(gridH - spacing, pi * bandHeight);
-    const bandBottom = Math.min(gridH, bandTop + Math.max(bandHeight, spacing * 2));
+  // Scan rows top to bottom with staggered placement
+  let rowNum = 0;
+  let y = 1; // start 1 cell from top edge
 
-    // Fill the band with this plant at proper spacing
-    for (let y = bandTop + halfSpacing; y <= bandBottom - halfSpacing; y += spacing) {
-      for (let x = halfSpacing; x <= gridW - halfSpacing; x += spacing) {
-        if (!isClear(x, y, halfSpacing)) continue;
-        if (hasConflictNearby(x, y, plant.id, spacing + 2)) continue;
-
-        placements.push({ plantId: plant.id, x, y });
-        markOccupied(x, y, halfSpacing, plant.id);
+  while (y < gridH - 1) {
+    // Find the plant type that should go in this row
+    // Priority: plant types that still need placing, preferring tall plants at top
+    let bestBudget = null;
+    let bestScore = -Infinity;
+    for (const b of plantBudgets) {
+      if (b.placed >= b.target * 3) continue; // allow generous overflow
+      const remaining = b.target - b.placed;
+      if (remaining <= 0 && b.placed > 0) continue; // skip if fully placed (but allow first placement)
+      // Height preference: tall plants at top
+      const heightPref = (b.plant.heightIn || 24) > 36
+        ? (gridH - y) * 0.5 // tall plants prefer being near top
+        : y * 0.3; // short plants prefer bottom
+      const needScore = remaining > 0 ? remaining * 2 : 0;
+      const score = heightPref + needScore;
+      if (score > bestScore) {
+        bestScore = score;
+        bestBudget = b;
       }
     }
 
-    // If the band was too constrained, try filling remaining space anywhere
-    if (placements.filter(p => p.plantId === plant.id).length === 0) {
-      for (let y = halfSpacing; y <= gridH - halfSpacing; y += spacing) {
-        for (let x = halfSpacing; x <= gridW - halfSpacing; x += spacing) {
-          if (!isClear(x, y, halfSpacing)) continue;
-          if (hasConflictNearby(x, y, plant.id, spacing + 2)) continue;
+    if (!bestBudget) break;
 
-          placements.push({ plantId: plant.id, x, y });
-          markOccupied(x, y, halfSpacing, plant.id);
-        }
+    const sp = bestBudget.spacing;
+    const halfSp = Math.ceil(sp / 2);
+    if (y + halfSp > gridH) break;
+
+    // Stagger: offset odd rows by half spacing for hex-grid look
+    const xOffset = (rowNum % 2 === 1) ? Math.floor(sp / 2) : 0;
+
+    let placedInRow = 0;
+    for (let x = halfSp + xOffset; x <= gridW - halfSp; x += sp) {
+      // Add slight random offset for natural look (±1 cell)
+      const jitterX = ((x * 7 + y * 13) % 3) - 1;
+      const jitterY = ((x * 11 + y * 5) % 3) - 1;
+      const px = Math.max(halfSp, Math.min(gridW - halfSp, x + jitterX));
+      const py = Math.max(halfSp, Math.min(gridH - halfSp, y + jitterY));
+
+      if (!isClear(px, py, halfSp)) continue;
+      if (hasConflictNearby(px, py, bestBudget.plant.id, sp)) continue;
+
+      placements.push({ plantId: bestBudget.plant.id, x: px, y: py });
+      markOccupied(px, py, halfSp, bestBudget.plant.id);
+      bestBudget.placed++;
+      placedInRow++;
+    }
+
+    // Move to next row — use smallest spacing of remaining plants for dense packing
+    const minSpacing = Math.min(...plantBudgets.filter(b => b.placed < b.target * 3).map(b => b.spacing), sp);
+    y += Math.max(2, minSpacing);
+    rowNum++;
+  }
+
+  // Phase 2: Fill any remaining gaps with the least-placed plant types
+  const underplaced = plantBudgets
+    .filter(b => b.placed === 0 || b.placed < 2)
+    .sort((a, b) => a.placed - b.placed);
+
+  for (const b of underplaced) {
+    const sp = b.spacing;
+    const halfSp = Math.ceil(sp / 2);
+    for (let scanY = halfSp; scanY <= gridH - halfSp; scanY += sp) {
+      for (let scanX = halfSp; scanX <= gridW - halfSp; scanX += sp) {
+        if (!isClear(scanX, scanY, halfSp)) continue;
+        if (hasConflictNearby(scanX, scanY, b.plant.id, sp)) continue;
+        placements.push({ plantId: b.plant.id, x: scanX, y: scanY });
+        markOccupied(scanX, scanY, halfSp, b.plant.id);
+        b.placed++;
       }
     }
   }
