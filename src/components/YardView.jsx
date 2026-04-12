@@ -1596,25 +1596,34 @@ export default function YardView() {
           })()}
 
           {/* Scale quadrant group */}
-          {editingPlot?.quadrantGroupId && (
-            <div className="flex items-center gap-1 ml-1">
-              <button
-                onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId: editingPlot.quadrantGroupId, scale: 0.9 } })}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
-                title="Shrink quadrant group 10%"
-              >
-                −
-              </button>
-              <span className="text-[10px] text-sage-dark/60">Size</span>
-              <button
-                onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId: editingPlot.quadrantGroupId, scale: 1.1 } })}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
-                title="Grow quadrant group 10%"
-              >
-                +
-              </button>
-            </div>
-          )}
+          {(() => {
+            const groupId = editingPlot?.quadrantGroupId
+              || (() => {
+                if (multiSelectedPlots.size === 0) return null;
+                const first = state.plots.find(p => multiSelectedPlots.has(p.id));
+                return first?.quadrantGroupId || null;
+              })();
+            if (!groupId) return null;
+            return (
+              <div className="flex items-center gap-1 ml-1">
+                <button
+                  onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId, scale: 0.9 } })}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
+                  title="Shrink quadrant group 10%"
+                >
+                  −
+                </button>
+                <span className="text-[10px] text-sage-dark/60">Size</span>
+                <button
+                  onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId, scale: 1.1 } })}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
+                  title="Grow quadrant group 10%"
+                >
+                  +
+                </button>
+              </div>
+            );
+          })()}
 
           {/* Delete selected plot(s) */}
           {(editingPlot || multiSelectedPlots.size > 0) && (
