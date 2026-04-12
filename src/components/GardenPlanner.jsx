@@ -252,8 +252,17 @@ function PlotEditor() {
         const dy = (a.y + a._offsetY) - (b.y + b._offsetY);
         const distCells = Math.sqrt(dx * dx + dy * dy);
         const distInches = distCells * 6;
-        // Use the larger spacing requirement of the two plants
-        const minSpacing = Math.max(aData.spacingIn, bData.spacingIn);
+        // If plants have very different heights (2x+), the shorter one can grow
+        // underneath — use the shorter plant's spacing instead of the max
+        const tall = Math.max(aData.heightIn, bData.heightIn);
+        const short = Math.min(aData.heightIn, bData.heightIn);
+        const canLayer = tall >= short * 2;
+        // Also skip warning entirely for companions that can layer
+        const isCompanion = aData.companions?.includes(b.plantId) || bData.companions?.includes(a.plantId);
+        if (canLayer && isCompanion) continue;
+        const minSpacing = canLayer
+          ? Math.min(aData.spacingIn, bData.spacingIn)
+          : Math.max(aData.spacingIn, bData.spacingIn);
         if (distInches < minSpacing * 0.9) {
           warnings.add(a.id);
           warnings.add(b.id);
