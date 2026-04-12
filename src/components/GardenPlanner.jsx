@@ -383,15 +383,18 @@ function PlotEditor() {
         setMovingItem(prev => ({ ...prev, dragging: true }));
       }
       setMovePos({
-        x: snapToGrid(svg.x - movingItem.offsetX),
-        y: snapToGrid(svg.y - movingItem.offsetY),
+        x: movingItem.type === 'plant' ? svg.x - movingItem.offsetX : snapToGrid(svg.x - movingItem.offsetX),
+        y: movingItem.type === 'plant' ? svg.y - movingItem.offsetY : snapToGrid(svg.y - movingItem.offsetY),
       });
       return;
     }
 
     // Placement preview
     if (placingItem) {
-      setPlacePreviewPos({ x: snapToGrid(svg.x), y: snapToGrid(svg.y) });
+      setPlacePreviewPos({
+        x: placingItem.type === 'plant' ? svg.x : snapToGrid(svg.x),
+        y: placingItem.type === 'plant' ? svg.y : snapToGrid(svg.y),
+      });
     }
   }, [isPanning, panStart, resizing, movingItem, placingItem, draggingVertex, draggingPathPoint, selectedId, toSVG, zoom, activePlot, dispatch]);
 
