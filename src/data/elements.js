@@ -540,6 +540,7 @@ export const ELEMENTS = [
     color: '#D4C8B0',
     borderColor: '#8A7A6A',
     description: 'Life-size outdoor chess board with pieces — 8×8ft',
+    resizable: true,
   },
   {
     id: 'chicken-coop',

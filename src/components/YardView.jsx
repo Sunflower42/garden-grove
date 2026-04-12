@@ -2285,18 +2285,19 @@ export default function YardView() {
                       {elemData.name}
                     </text>
 
+                    {/* Dimension label — always visible */}
+                    <text x={pcx} y={pMaxY + 14 / zoom}
+                      textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={isSelected ? 0.8 : 0.55}
+                      style={{ pointerEvents: 'none' }}>
+                      ~{polyAreaVal} sq ft
+                    </text>
+
                     {/* Selection outline + resize handles */}
                     {isSelected && !isEditingShape && (
                       <>
                         <polygon points={polyPoints}
                           fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="6 3"
                           style={{ pointerEvents: 'none' }} />
-                        {/* Area label */}
-                        <text x={pcx} y={pMaxY + 14 / zoom}
-                          textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={0.8}
-                          style={{ pointerEvents: 'none' }}>
-                          ~{polyAreaVal} sq ft
-                        </text>
                         {/* Delete button */}
                         <g style={{ cursor: 'pointer' }}
                           onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: el.id }); setSelectedYardElement(null); setEditingElementShape(null); }}>
@@ -2486,6 +2487,12 @@ export default function YardView() {
                       fill="none" stroke="#8B6AAE" strokeWidth={2 / zoom} strokeDasharray="4 4" rx={3}
                       style={{ pointerEvents: 'none' }} />
                   )}
+                  {/* Dimension label — always visible */}
+                  <text x={ecx} y={ey + eh + 14 / zoom}
+                    textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={isSelected ? 0.8 : 0.55}
+                    style={{ pointerEvents: 'none' }}>
+                    {el.width}' × {el.height}'
+                  </text>
                   {/* Selection handles */}
                   {isSelected && (
                     <>
@@ -2553,12 +2560,6 @@ export default function YardView() {
                           {rot}°
                         </text>
                       )}
-                      {/* Size label */}
-                      <text x={ecx} y={ey + eh + 14 / zoom}
-                        textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={0.8}
-                        style={{ pointerEvents: 'none' }}>
-                        {el.width}' × {el.height}'
-                      </text>
                       {/* Delete button */}
                       <g
                         style={{ cursor: 'pointer' }}
