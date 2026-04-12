@@ -596,6 +596,7 @@ export const ELEMENTS = [
     color: '#B8AAA0',
     borderColor: '#98887A',
     description: 'Solid concrete bench — modern and durable',
+    resizable: true,
   },
 
   // Steps
