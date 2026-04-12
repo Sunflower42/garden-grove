@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import {
   Plus, Trash2, ZoomIn, ZoomOut, Maximize2, ArrowRight,
   Home, Flower2, Move, GripVertical, Fence, X,
-  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown, RotateCw, Undo, Satellite, MapPin, Search
+  Copy, Layers, ChevronsUp, ChevronsDown, ArrowUp, ArrowDown, RotateCw, Undo, Satellite, MapPin, Search, Printer
 } from 'lucide-react';
 import { ELEMENTS, ELEMENT_CATEGORIES, getElementById } from '../data/elements';
 import { ElementSVG } from './ElementRenderer';
@@ -1112,6 +1112,44 @@ export default function YardView() {
   // Shape to SVG points string
   const shapeToPoints = (shape) => shape.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ');
 
+  // Print current viewport
+  const handlePrintView = useCallback(() => {
+    if (!containerRef.current || !panOffset || zoom === null) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const svgEl = containerRef.current.querySelector('svg');
+    if (!svgEl) return;
+    // Calculate visible area in SVG coordinates
+    const vx = -panOffset.x / zoom;
+    const vy = -panOffset.y / zoom;
+    const vw = rect.width / zoom;
+    const vh = rect.height / zoom;
+    // Clone the SVG
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', '100%');
+    clone.style.cursor = 'default';
+    // Remove interactive elements (selection handles, delete buttons, etc.)
+    clone.querySelectorAll('[style*="cursor: pointer"], [style*="cursor: grab"]').forEach(el => {
+      el.style.cursor = 'default';
+    });
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    printWindow.document.write(`<!DOCTYPE html>
+<html><head><title>Garden Grove — Yard Overview</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: landscape; margin: 0.5in; }
+  body { display: flex; align-items: center; justify-content: center; height: 100vh; background: white; }
+  .container { width: 100%; height: 100%; }
+  svg { width: 100%; height: 100%; }
+</style></head>
+<body><div class="container">${svgStr}</div>
+<script>window.onload = function() { window.print(); }<\/script>
+</body></html>`);
+    printWindow.document.close();
+  }, [panOffset, zoom]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
@@ -1568,6 +1606,15 @@ export default function YardView() {
             title="Undo (Ctrl+Z)"
           >
             <Undo className="w-4 h-4" />
+          </button>
+
+          {/* Print current view */}
+          <button
+            onClick={handlePrintView}
+            className="ml-1 p-1.5 rounded-lg text-sage-dark dark:text-sage hover:bg-sage/10 transition-all"
+            title="Print current view"
+          >
+            <Printer className="w-4 h-4" />
           </button>
 
           {/* Rotate selected plot(s) */}

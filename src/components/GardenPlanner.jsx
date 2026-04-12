@@ -8,7 +8,7 @@ import { ElementSVG } from './ElementRenderer';
 import YardView from './YardView';
 import {
   Sprout, Trash2, Search, ChevronDown, ChevronRight, X,
-  Maximize2, ZoomIn, ZoomOut, Flower2, Fence, Move, GripVertical, ArrowLeft, Home, Wand2, ShoppingCart, Plus
+  Maximize2, ZoomIn, ZoomOut, Flower2, Fence, Move, GripVertical, ArrowLeft, Home, Wand2, ShoppingCart, Plus, Printer
 } from 'lucide-react';
 import { suggestLayout } from '../data/layoutSuggester';
 import { generateRecommendations } from '../data/recommendations';
@@ -780,6 +780,40 @@ function PlotEditor() {
     return { x, y };
   }, [movingItem, movePos]);
 
+  // Print current garden view
+  const handlePrintGarden = useCallback(() => {
+    if (!containerRef.current || !panOffset) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+    const vx = -panOffset.x / zoom;
+    const vy = -panOffset.y / zoom;
+    const vw = rect.width / zoom;
+    const vh = rect.height / zoom;
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
+    clone.setAttribute('width', '100%');
+    clone.setAttribute('height', '100%');
+    clone.style.cursor = 'default';
+    const title = isQuadrantView ? 'Quadrant Garden' : activePlot?.name || 'Garden Plot';
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    printWindow.document.write(`<!DOCTYPE html>
+<html><head><title>Garden Grove — ${title}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  @page { size: landscape; margin: 0.5in; }
+  body { display: flex; flex-direction: column; align-items: center; height: 100vh; background: white; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18px; color: #3A5A2A; margin: 12px 0 8px; }
+  .container { flex: 1; width: 100%; }
+  svg { width: 100%; height: 100%; }
+</style></head>
+<body><h1>${title}</h1><div class="container">${svgStr}</div>
+<script>window.onload = function() { window.print(); }<\/script>
+</body></html>`);
+    printWindow.document.close();
+  }, [panOffset, zoom, isQuadrantView, activePlot?.name]);
+
   return (
     <div className="h-full flex">
       {/* Palette sidebar */}
@@ -1119,6 +1153,14 @@ function PlotEditor() {
                 title="Reset view"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={handlePrintGarden}
+                style={{ padding: 8 }}
+                className="rounded-md hover:bg-sage/10 text-sage-dark dark:text-sage transition-colors"
+                title="Print current view"
+              >
+                <Printer className="w-3.5 h-3.5" />
               </button>
             </div>
 
