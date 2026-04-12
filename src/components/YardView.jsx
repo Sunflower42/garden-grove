@@ -87,6 +87,7 @@ export default function YardView() {
 
   // Yard element placement & editing
   const [showElementMenu, setShowElementMenu] = useState(false);
+  const [elementSearchQuery, setElementSearchQuery] = useState('');
   const [placingElement, setPlacingElement] = useState(null); // { elementId }
   const [elementPreviewPos, setElementPreviewPos] = useState(null);
   const [selectedYardElement, setSelectedYardElement] = useState(null); // element id
@@ -1464,7 +1465,7 @@ export default function YardView() {
           {/* Add Elements */}
           <div className="relative">
             <button
-              onClick={() => { setShowElementMenu(!showElementMenu); setShowAddMenu(false); }}
+              onClick={() => { setShowElementMenu(!showElementMenu); setShowAddMenu(false); setElementSearchQuery(''); }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
                 placingElement
                   ? 'bg-terra text-cream'
@@ -1491,8 +1492,23 @@ export default function YardView() {
                   className="absolute right-0 top-12 z-30 bg-white dark:bg-midnight-green rounded-2xl shadow-xl shadow-black/10 border border-sage/15 dark:border-sage-dark/20 overflow-y-auto"
                   style={{ padding: '8px 0', maxHeight: 400, width: 280 }}
                 >
+                  <div style={{ padding: '4px 10px 8px' }}>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-sage-dark/40 dark:text-sage/40" />
+                      <input
+                        type="text"
+                        value={elementSearchQuery}
+                        onChange={(e) => setElementSearchQuery(e.target.value)}
+                        placeholder="Search elements..."
+                        autoFocus
+                        className="w-full text-xs bg-sage/5 dark:bg-sage/8 rounded-lg border border-sage/15 dark:border-sage-dark/20 text-forest-deep dark:text-cream placeholder:text-sage-dark/30 dark:placeholder:text-sage/30"
+                        style={{ padding: '6px 10px 6px 28px' }}
+                      />
+                    </div>
+                  </div>
                   {Object.entries(ELEMENT_CATEGORIES).map(([catKey, cat]) => {
-                    const catElems = ELEMENTS.filter(e => e.category === catKey);
+                    const q = elementSearchQuery.toLowerCase().trim();
+                    const catElems = ELEMENTS.filter(e => e.category === catKey && (!q || e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q) || cat.label.toLowerCase().includes(q)));
                     if (catElems.length === 0) return null;
                     return (
                       <div key={catKey}>
