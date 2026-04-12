@@ -231,6 +231,38 @@ function PlotEditor() {
     return map;
   }, [selectedId, selectedType, activePlot.plants]);
 
+  // Spacing violations — pairs of plants that are too close
+  const spacingWarnings = useMemo(() => {
+    const allPlants = isQuadrantView
+      ? quadrantLayout.flatMap(q =>
+          q.plot.plants.map(p => ({ ...p, _offsetX: q.offsetX, _offsetY: q.offsetY }))
+        )
+      : activePlot.plants.map(p => ({ ...p, _offsetX: 0, _offsetY: 0 }));
+    const warnings = new Set(); // Set of plant ids that are too close to something
+    for (let i = 0; i < allPlants.length; i++) {
+      const a = allPlants[i];
+      const aData = getPlantById(a.plantId);
+      if (!aData) continue;
+      for (let j = i + 1; j < allPlants.length; j++) {
+        const b = allPlants[j];
+        const bData = getPlantById(b.plantId);
+        if (!bData) continue;
+        // Distance in cell units (each cell = 6")
+        const dx = (a.x + a._offsetX) - (b.x + b._offsetX);
+        const dy = (a.y + a._offsetY) - (b.y + b._offsetY);
+        const distCells = Math.sqrt(dx * dx + dy * dy);
+        const distInches = distCells * 6;
+        // Use the larger spacing requirement of the two plants
+        const minSpacing = Math.max(aData.spacingIn, bData.spacingIn);
+        if (distInches < minSpacing * 0.9) {
+          warnings.add(a.id);
+          warnings.add(b.id);
+        }
+      }
+    }
+    return warnings;
+  }, [isQuadrantView, quadrantLayout, activePlot.plants]);
+
   // Convert screen coords → SVG coords
   const toSVG = useCallback((clientX, clientY) => {
     if (!containerRef.current) return { x: 0, y: 0 };
@@ -1628,6 +1660,26 @@ function PlotEditor() {
                       >
                         '{p.variety}'
                       </text>
+                    )}
+                    {/* Spacing warning */}
+                    {spacingWarnings.has(p.id) && (
+                      <g style={{ pointerEvents: 'none' }}>
+                        <circle
+                          cx={pos.x + CELL_SIZE / 2} cy={pos.y + CELL_SIZE / 2}
+                          r={CELL_SIZE * 0.7}
+                          fill="none" stroke="#C4544A" strokeWidth={1.5} strokeDasharray="3 2"
+                          opacity={0.7}
+                        />
+                        <circle
+                          cx={pos.x + CELL_SIZE - 2} cy={pos.y + 2}
+                          r={5} fill="#C4544A"
+                        />
+                        <text
+                          x={pos.x + CELL_SIZE - 2} y={pos.y + 5.5}
+                          textAnchor="middle" fontSize={8} fontWeight={700}
+                          fill="#FDF6E9" fontFamily="Outfit, sans-serif"
+                        >!</text>
+                      </g>
                     )}
                   </g>
                 );
