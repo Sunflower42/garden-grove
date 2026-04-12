@@ -365,8 +365,14 @@ function PlotEditor() {
       return;
     }
 
-    // Moving item
+    // Moving item — require a 4px drag threshold before committing to move
     if (movingItem) {
+      if (!movingItem.dragging) {
+        const dx = e.clientX - movingItem.startClientX;
+        const dy = e.clientY - movingItem.startClientY;
+        if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+        setMovingItem(prev => ({ ...prev, dragging: true }));
+      }
       setMovePos({
         x: snapToGrid(svg.x - movingItem.offsetX),
         y: snapToGrid(svg.y - movingItem.offsetY),
@@ -414,19 +420,21 @@ function PlotEditor() {
       return;
     }
 
-    // Commit move
-    if (movingItem && movePos) {
-      const movePlot = findPlotForItem(movingItem.type, movingItem.id);
-      // In quadrant view, convert combined coords back to local plot coords
-      const q = quadrantLayout?.find(q => q.plot.id === movePlot.id);
-      const offsetPx = q ? q.offsetX * CELL_SIZE : 0;
-      const offsetPy = q ? q.offsetY * CELL_SIZE : 0;
-      const newX = (movePos.x - offsetPx) / CELL_SIZE;
-      const newY = (movePos.y - offsetPy) / CELL_SIZE;
-      if (movingItem.type === 'plant') {
-        dispatch({ type: 'MOVE_PLANT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
-      } else {
-        dispatch({ type: 'MOVE_ELEMENT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
+    // Commit move (or cancel if no drag happened)
+    if (movingItem) {
+      if (movingItem.dragging && movePos) {
+        const movePlot = findPlotForItem(movingItem.type, movingItem.id);
+        // In quadrant view, convert combined coords back to local plot coords
+        const q = quadrantLayout?.find(q => q.plot.id === movePlot.id);
+        const offsetPx = q ? q.offsetX * CELL_SIZE : 0;
+        const offsetPy = q ? q.offsetY * CELL_SIZE : 0;
+        const newX = (movePos.x - offsetPx) / CELL_SIZE;
+        const newY = (movePos.y - offsetPy) / CELL_SIZE;
+        if (movingItem.type === 'plant') {
+          dispatch({ type: 'MOVE_PLANT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
+        } else {
+          dispatch({ type: 'MOVE_ELEMENT', payload: { plotId: movePlot.id, id: movingItem.id, x: newX, y: newY } });
+        }
       }
       setMovingItem(null);
       setMovePos(null);
@@ -566,6 +574,9 @@ function PlotEditor() {
       type, id,
       offsetX: svg.x - itemX,
       offsetY: svg.y - itemY,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      dragging: false,
     });
   }, [placingItem, toSVG, activePlot, isQuadrantView, quadrantPlots, quadrantLayout]);
 
