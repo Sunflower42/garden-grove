@@ -1404,26 +1404,17 @@ export default function YardView() {
                       <span className="text-xs text-sage-dark/60 dark:text-sage/60 font-medium">W</span>
                       <input
                         type="text"
-                        defaultValue={el.width}
+                        defaultValue={Math.round(el.width * 12)}
                         key={`w-${el.id}-${el.width}`}
                         className="w-12 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
                         style={{ padding: '2px 4px' }}
-                        title='Enter feet (e.g. 6) or inches with " (e.g. 70")'
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          }
-                        }}
+                        title="Width in inches"
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
                         onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          let ft;
-                          if (raw.endsWith('"') || raw.endsWith('in')) {
-                            ft = Math.round(parseFloat(raw) / 12 * 2) / 2;
-                          } else {
-                            ft = Math.round(parseFloat(raw) * 2) / 2;
-                          }
-                          if (ft && ft >= 0.5) {
-                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, width: ft } });
+                          const raw = e.target.value.trim().replace(/["'in]/g, '');
+                          const inches = parseFloat(raw);
+                          if (inches && inches >= 6) {
+                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, width: Math.round(inches / 12 * 100) / 100 } });
                           }
                         }}
                       />
@@ -1431,30 +1422,21 @@ export default function YardView() {
                       <span className="text-xs text-sage-dark/60 dark:text-sage/60 font-medium">H</span>
                       <input
                         type="text"
-                        defaultValue={el.height}
+                        defaultValue={Math.round(el.height * 12)}
                         key={`h-${el.id}-${el.height}`}
                         className="w-12 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
                         style={{ padding: '2px 4px' }}
-                        title='Enter feet (e.g. 6) or inches with " (e.g. 70")'
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.target.blur();
-                          }
-                        }}
+                        title="Height in inches"
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
                         onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          let ft;
-                          if (raw.endsWith('"') || raw.endsWith('in')) {
-                            ft = Math.round(parseFloat(raw) / 12 * 2) / 2;
-                          } else {
-                            ft = Math.round(parseFloat(raw) * 2) / 2;
-                          }
-                          if (ft && ft >= 0.5) {
-                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, height: ft } });
+                          const raw = e.target.value.trim().replace(/["'in]/g, '');
+                          const inches = parseFloat(raw);
+                          if (inches && inches >= 6) {
+                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, height: Math.round(inches / 12 * 100) / 100 } });
                           }
                         }}
                       />
-                      <span className="text-xs text-sage-dark/40 dark:text-sage/40">ft</span>
+                      <span className="text-xs text-sage-dark/40 dark:text-sage/40">in</span>
                     </div>
                   );
                 })()}
@@ -2570,7 +2552,7 @@ export default function YardView() {
                   <text x={ecx} y={ey + eh + 14 / zoom}
                     textAnchor="middle" fontSize={8 / zoom} fontFamily="Outfit" fill="#C17644" opacity={isSelected ? 0.8 : 0.55}
                     style={{ pointerEvents: 'none' }}>
-                    {el.width}' × {el.height}'
+                    {Math.round(el.width * 12)}" × {Math.round(el.height * 12)}"
                   </text>
                   {/* Selection handles */}
                   {isSelected && (
