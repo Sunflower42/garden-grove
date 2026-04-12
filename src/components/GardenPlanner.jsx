@@ -68,6 +68,9 @@ function PlotEditor() {
   const [selectedId, setSelectedId] = useState(null);
   const [selectedType, setSelectedType] = useState(null); // 'plant' or 'element'
 
+  // Rename quadrant bed
+  const [renamingBedId, setRenamingBedId] = useState(null);
+
   // Drag-to-move state
   const [movingItem, setMovingItem] = useState(null); // { type, id, startX, startY, offsetX, offsetY }
   const [movePos, setMovePos] = useState(null);
@@ -1326,21 +1329,57 @@ function PlotEditor() {
                       />
                     ))}
                     {/* Bed labels */}
-                    {quadrantLayout.map(q => (
-                      <text
-                        key={`label-${q.plot.id}`}
-                        x={(q.offsetX + q.cellsW / 2) * CELL_SIZE}
-                        y={(q.offsetY + 1) * CELL_SIZE}
-                        textAnchor="middle"
-                        fontSize={9}
-                        fill="#8B9E7E"
-                        opacity={0.5}
-                        fontFamily="Outfit, sans-serif"
-                        fontWeight={500}
-                      >
-                        {q.plot.name}
-                      </text>
-                    ))}
+                    {quadrantLayout.map(q => {
+                      const lx = (q.offsetX + q.cellsW / 2) * CELL_SIZE;
+                      const ly = (q.offsetY + 1) * CELL_SIZE;
+                      if (renamingBedId === q.plot.id) {
+                        return (
+                          <foreignObject
+                            key={`label-${q.plot.id}`}
+                            x={lx - 50} y={ly - 14}
+                            width={100} height={22}
+                          >
+                            <input
+                              type="text"
+                              defaultValue={q.plot.name}
+                              autoFocus
+                              style={{
+                                width: '100%', textAlign: 'center', fontSize: 9,
+                                fontFamily: 'Outfit, sans-serif', fontWeight: 500,
+                                background: 'rgba(255,255,255,0.9)', border: '1px solid #8B9E7E',
+                                borderRadius: 4, padding: '1px 4px', outline: 'none',
+                                color: '#3A5A2A',
+                              }}
+                              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setRenamingBedId(null); }}
+                              onBlur={(e) => {
+                                const name = e.target.value.trim();
+                                if (name && name !== q.plot.name) {
+                                  dispatch({ type: 'UPDATE_PLOT_NAME', payload: { id: q.plot.id, name } });
+                                }
+                                setRenamingBedId(null);
+                              }}
+                            />
+                          </foreignObject>
+                        );
+                      }
+                      return (
+                        <text
+                          key={`label-${q.plot.id}`}
+                          x={lx}
+                          y={ly}
+                          textAnchor="middle"
+                          fontSize={9}
+                          fill="#8B9E7E"
+                          opacity={0.5}
+                          fontFamily="Outfit, sans-serif"
+                          fontWeight={500}
+                          style={{ cursor: 'pointer' }}
+                          onDoubleClick={(e) => { e.stopPropagation(); setRenamingBedId(q.plot.id); }}
+                        >
+                          {q.plot.name}
+                        </text>
+                      );
+                    })}
                   </g>
                 );
               })()}
