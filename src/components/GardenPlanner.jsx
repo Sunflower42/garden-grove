@@ -434,6 +434,14 @@ function PlotEditor() {
     }
   }, [isPanning, resizing, movingItem, movePos, draggingVertex, draggingPathPoint, findPlotForItem, quadrantLayout, dispatch, activePlot?.id]);
 
+  // Global mouseup listener — ensures drops register even if mouse leaves the SVG area
+  useEffect(() => {
+    if (!movingItem && !resizing && !draggingVertex && !draggingPathPoint) return;
+    const onGlobalMouseUp = (e) => handleMouseUp(e);
+    window.addEventListener('mouseup', onGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', onGlobalMouseUp);
+  }, [movingItem, resizing, draggingVertex, draggingPathPoint, handleMouseUp]);
+
   // Double-click detection for path drawing
   const lastClickRef = useRef({ time: 0, x: 0, y: 0 });
 
@@ -1234,7 +1242,7 @@ function PlotEditor() {
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onMouseLeave={() => { setIsPanning(false); }}
+          onMouseLeave={(e) => { setIsPanning(false); if (movingItem) handleMouseUp(e); }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Height legend — only in full-grown view */}
