@@ -401,10 +401,10 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
               opacity={0.4}
             />
           ))}
-          {/* Concrete paver squares — fixed 2ft size */}
+          {/* Concrete paver squares — 24" (2ft) real size */}
           {(() => {
-            const paverSize = 12; // ~2ft in SVG units (constant size)
-            const gap = 2.5; // DG gap between pavers
+            const paverSize = 2 * cellSize; // 24" = 2ft in SVG units
+            const gap = cellSize / 4; // ~3" DG gap between pavers
             const step = paverSize + gap;
             const pavers = [];
             const startX = px + gap;
