@@ -402,9 +402,9 @@ export default function YardView() {
       const el = state.yardElements.find(y => y.id === resizingYardElement.id);
       if (el) {
         const edge = resizingYardElement.edge;
-        const snap = (v) => Math.round(v * 2) / 2;
-        const ftX = snap(toFt(svg.x));
-        const ftY = snap(toFt(svg.y));
+        const toInch = (v) => Math.round(v * 12) / 12;
+        const ftX = toInch(toFt(svg.x));
+        const ftY = toInch(toFt(svg.y));
 
         // For polygon elements, scale the polygon vertices
         if (el.polygon && el.polygon.length >= 3) {
@@ -420,8 +420,8 @@ export default function YardView() {
           const scaleX = (newMaxX - newMinX) / (oldMaxX - oldMinX || 1);
           const scaleY = (newMaxY - newMinY) / (oldMaxY - oldMinY || 1);
           const newPoly = el.polygon.map(p => ({
-            x: snap(newMinX + (p.x - oldMinX) * scaleX),
-            y: snap(newMinY + (p.y - oldMinY) * scaleY),
+            x: toInch(newMinX + (p.x - oldMinX) * scaleX),
+            y: toInch(newMinY + (p.y - oldMinY) * scaleY),
           }));
           dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
         } else {
