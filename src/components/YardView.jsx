@@ -1118,21 +1118,20 @@ export default function YardView() {
     const rect = containerRef.current.getBoundingClientRect();
     const svgEl = containerRef.current.querySelector('svg');
     if (!svgEl) return;
-    // Calculate visible area in SVG coordinates
+    // Calculate visible area in SVG coordinates (before the g transform)
     const vx = -panOffset.x / zoom;
     const vy = -panOffset.y / zoom;
     const vw = rect.width / zoom;
     const vh = rect.height / zoom;
-    // Clone the SVG
+    // Clone the SVG and reset the inner g transform to identity
     const clone = svgEl.cloneNode(true);
     clone.setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
     clone.setAttribute('width', '100%');
     clone.setAttribute('height', '100%');
     clone.style.cursor = 'default';
-    // Remove interactive elements (selection handles, delete buttons, etc.)
-    clone.querySelectorAll('[style*="cursor: pointer"], [style*="cursor: grab"]').forEach(el => {
-      el.style.cursor = 'default';
-    });
+    // Remove the pan/zoom transform — viewBox handles the framing now
+    const innerG = clone.querySelector('g[transform]');
+    if (innerG) innerG.setAttribute('transform', 'scale(1)');
     const svgStr = new XMLSerializer().serializeToString(clone);
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
     printWindow.document.write(`<!DOCTYPE html>

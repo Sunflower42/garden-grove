@@ -795,6 +795,9 @@ function PlotEditor() {
     clone.setAttribute('width', '100%');
     clone.setAttribute('height', '100%');
     clone.style.cursor = 'default';
+    // Remove the pan/zoom transform — viewBox handles the framing now
+    const innerG = clone.querySelector('g[transform]');
+    if (innerG) innerG.setAttribute('transform', 'scale(1)');
     const title = isQuadrantView ? 'Quadrant Garden' : activePlot?.name || 'Garden Plot';
     const svgStr = new XMLSerializer().serializeToString(clone);
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
