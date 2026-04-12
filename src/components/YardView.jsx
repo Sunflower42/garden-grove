@@ -2761,7 +2761,20 @@ export default function YardView() {
                 {editingPlot.icon}
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-forest-deep dark:text-cream leading-tight">{editingPlot.name}</div>
+                <input
+                  type="text"
+                  defaultValue={editingPlot.name}
+                  key={`pname-${editingPlot.id}`}
+                  className="text-sm font-semibold text-forest-deep dark:text-cream leading-tight bg-transparent border-b border-transparent hover:border-sage/30 focus:border-terra focus:outline-none"
+                  style={{ padding: '0 2px', margin: '-1px -2px', width: '100%' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (name && name !== editingPlot.name) {
+                      dispatch({ type: 'UPDATE_PLOT_NAME', payload: { id: editingPlot.id, name } });
+                    }
+                  }}
+                />
                 <div className="text-[10px] text-sage-dark/70 dark:text-sage/60 mt-0.5">
                   {Math.round(polyArea(getPlotShape(editingPlot)))} sq ft · {getPlotShape(editingPlot).length} points · {editingPlot.plants.length} plants
                 </div>
