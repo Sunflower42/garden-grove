@@ -1394,6 +1394,69 @@ export default function YardView() {
                     <ChevronsDown className="w-3.5 h-3.5" />
                   </button>
                 </div>
+                {/* Dimension inputs */}
+                {(() => {
+                  const elemData = getElementById(el.elementId);
+                  if (!elemData || !elemData.resizable) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20" style={{ padding: '3px 8px' }}>
+                      <span className="text-xs text-sage-dark/60 dark:text-sage/60 font-medium">W</span>
+                      <input
+                        type="text"
+                        defaultValue={el.width}
+                        key={`w-${el.id}-${el.width}`}
+                        className="w-12 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                        style={{ padding: '2px 4px' }}
+                        title='Enter feet (e.g. 6) or inches with " (e.g. 70")'
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          let ft;
+                          if (raw.endsWith('"') || raw.endsWith('in')) {
+                            ft = Math.round(parseFloat(raw) / 12 * 2) / 2;
+                          } else {
+                            ft = Math.round(parseFloat(raw) * 2) / 2;
+                          }
+                          if (ft && ft >= 0.5) {
+                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, width: ft } });
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-sage-dark/40 dark:text-sage/40">×</span>
+                      <span className="text-xs text-sage-dark/60 dark:text-sage/60 font-medium">H</span>
+                      <input
+                        type="text"
+                        defaultValue={el.height}
+                        key={`h-${el.id}-${el.height}`}
+                        className="w-12 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                        style={{ padding: '2px 4px' }}
+                        title='Enter feet (e.g. 6) or inches with " (e.g. 70")'
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.target.blur();
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim();
+                          let ft;
+                          if (raw.endsWith('"') || raw.endsWith('in')) {
+                            ft = Math.round(parseFloat(raw) / 12 * 2) / 2;
+                          } else {
+                            ft = Math.round(parseFloat(raw) * 2) / 2;
+                          }
+                          if (ft && ft >= 0.5) {
+                            dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, height: ft } });
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-sage-dark/40 dark:text-sage/40">ft</span>
+                    </div>
+                  );
+                })()}
               </>
             );
           })()}
