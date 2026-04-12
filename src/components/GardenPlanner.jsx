@@ -1659,6 +1659,12 @@ function PlotEditor() {
                     onMouseDown={(e) => handleItemMouseDown('plant', p.id, e)}
                     style={{ cursor: movingItem?.id === p.id ? 'grabbing' : 'grab', opacity: isWantItem ? 0.5 : 1 }}
                   >
+                    {/* Invisible hit area for easier grabbing */}
+                    <circle
+                      cx={pos.x + CELL_SIZE / 2} cy={pos.y + CELL_SIZE / 2}
+                      r={CELL_SIZE * 0.8}
+                      fill="transparent"
+                    />
                     <PlantSVG
                       plant={plantData}
                       viewMode={state.viewMode}
