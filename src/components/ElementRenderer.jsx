@@ -407,10 +407,16 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
             const gap = cellSize / 4; // ~3" DG gap between pavers
             const step = paverSize + gap;
             const pavers = [];
-            const startX = px + gap;
-            const startY = py + gap;
-            for (let sy = startY; sy + paverSize <= py + h; sy += step) {
-              for (let sx = startX; sx + paverSize <= px + w; sx += step) {
+            const colCount = Math.max(1, Math.floor((w - gap) / step));
+            const rowCount = Math.max(1, Math.floor((h - gap) / step));
+            const usedW = colCount * paverSize + (colCount - 1) * gap;
+            const usedH = rowCount * paverSize + (rowCount - 1) * gap;
+            const startX = px + (w - usedW) / 2;
+            const startY = py + (h - usedH) / 2;
+            for (let row = 0; row < rowCount; row++) {
+              for (let col = 0; col < colCount; col++) {
+                const sx = startX + col * step;
+                const sy = startY + row * step;
                 pavers.push(
                   <g key={`pv-${sx}-${sy}`}>
                     <rect x={sx} y={sy} width={paverSize} height={paverSize}
