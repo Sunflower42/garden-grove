@@ -2635,9 +2635,9 @@ export default function YardView({ isMobile }) {
                 >
                   {/* Larger invisible hit area — extra padding for narrow elements */}
                   {(() => {
-                    const minHit = 16 / (zoom || 1); // minimum clickable size in SVG units
-                    const padX = Math.max(6, (minHit - ew) / 2);
-                    const padY = Math.max(6, (minHit - eh) / 2);
+                    const minHit = 24 / (zoom || 1); // minimum clickable size in SVG units
+                    const padX = Math.max(8, (minHit - ew) / 2);
+                    const padY = Math.max(8, (minHit - eh) / 2);
                     return (
                       <rect
                         x={ex - padX} y={ey - padY} width={ew + padX * 2} height={eh + padY * 2}
