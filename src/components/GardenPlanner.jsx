@@ -32,18 +32,18 @@ function buildPath(points, handles) {
   return d;
 }
 
-export default function GardenPlanner() {
+export default function GardenPlanner({ isMobile }) {
   const { state, dispatch } = useStore();
 
   // If no active plot, show the yard overview
   if (!state.activePlotId) {
-    return <YardView />;
+    return <YardView isMobile={isMobile} />;
   }
 
-  return <PlotEditor />;
+  return <PlotEditor isMobile={isMobile} />;
 }
 
-function PlotEditor() {
+function PlotEditor({ isMobile }) {
   const { state, dispatch } = useStore();
   const svgRef = useRef(null);
   const containerRef = useRef(null);
@@ -55,6 +55,7 @@ function PlotEditor() {
   const [paletteSearch, setPaletteSearch] = useState('');
   const [showMySeeds, setShowMySeeds] = useState(false);
   const [showTips, setShowTips] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(!isMobile);
   const [expandedCategories, setExpandedCategories] = useState({
     vegetable: true, herb: true, flower: true, fruit: true,
     structure: true, path: true, water: true, decor: true, protection: true,
@@ -818,9 +819,25 @@ function PlotEditor() {
   }, [panOffset, zoom, isQuadrantView, activePlot?.name]);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex relative">
+      {/* Mobile palette toggle */}
+      {isMobile && !paletteOpen && (
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="absolute top-3 left-3 z-30 w-10 h-10 rounded-xl bg-white/90 dark:bg-midnight-green/90 border border-sage/20 dark:border-sage-dark/30 shadow-lg flex items-center justify-center backdrop-blur-sm"
+          aria-label="Open palette"
+        >
+          <Sprout className="w-4 h-4 text-forest dark:text-sage" />
+        </button>
+      )}
+
+      {/* Mobile overlay backdrop */}
+      {isMobile && paletteOpen && (
+        <div className="fixed inset-0 bg-black/30 z-30" onClick={() => setPaletteOpen(false)} />
+      )}
+
       {/* Palette sidebar */}
-      <div className="w-64 shrink-0 border-r border-sage/12 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 flex flex-col backdrop-blur-sm">
+      <div className={`${isMobile ? 'fixed top-0 left-0 h-full z-40 transition-transform duration-300 ease-out w-72' : 'w-64'} shrink-0 border-r border-sage/12 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 flex flex-col backdrop-blur-sm ${isMobile && !paletteOpen ? '-translate-x-full' : 'translate-x-0'}`}>
         {/* Palette tabs */}
         <div className="flex border-b border-sage/10 dark:border-sage-dark/15" style={{ padding: 16, gap: 12 }}>
           <button
@@ -916,6 +933,7 @@ function PlotEditor() {
                             setPlacingItem({ type: 'plant', id: plant.id, pickingVariety: true });
                           } else {
                             setPlacingItem({ type: 'plant', id: plant.id });
+                            if (isMobile) setPaletteOpen(false);
                           }
                           setSelectedId(null);
                           setSelectedType(null);
@@ -957,6 +975,7 @@ function PlotEditor() {
                           <button
                             onClick={() => {
                               setPlacingItem({ type: 'plant', id: plant.id, variety: null });
+                              if (isMobile) setPaletteOpen(false);
                             }}
                             className="w-full flex items-center rounded-md text-left text-[11px] hover:bg-sage/8 dark:hover:bg-sage/8 transition-all text-sage-dark/60 dark:text-sage/50"
                             style={{ padding: '6px 12px', gap: 8 }}
@@ -969,6 +988,7 @@ function PlotEditor() {
                               key={inv.id}
                               onClick={() => {
                                 setPlacingItem({ type: 'plant', id: plant.id, variety: inv.variety, inventoryId: inv.id });
+                                if (isMobile) setPaletteOpen(false);
                               }}
                               className={`w-full flex items-center rounded-md text-left text-[11px] hover:bg-sage/8 dark:hover:bg-sage/8 transition-all ${
                                 inv.type === 'want' ? 'text-bloom-blue/70' : 'text-forest-deep dark:text-cream'
@@ -1044,6 +1064,7 @@ function PlotEditor() {
                         setPlacingItem({ type: 'element', id: elem.id });
                         setSelectedId(null);
                         setSelectedType(null);
+                        if (isMobile) setPaletteOpen(false);
                       }}
                       className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-lg text-left text-xs transition-all duration-150 ${
                         placingItem?.id === elem.id && placingItem?.type === 'element'
@@ -1071,54 +1092,58 @@ function PlotEditor() {
       {/* Garden Canvas */}
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
-        <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar" style={{ padding: '18px 28px', marginBottom: 0 }}>
-          <div className="flex items-center" style={{ gap: 12 }}>
+        <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar flex-wrap" style={{ padding: isMobile ? '10px 12px 10px 48px' : '18px 28px', marginBottom: 0 }}>
+          <div className="flex items-center" style={{ gap: isMobile ? 6 : 12 }}>
             <button
               onClick={() => dispatch({ type: 'SET_ACTIVE_PLOT', payload: null })}
-              className="flex items-center rounded-lg text-xs font-medium text-sage-dark dark:text-sage hover:bg-sage/10 dark:hover:bg-sage/10 transition-all duration-200 border border-sage/15 dark:border-sage-dark/20"
-              style={{ gap: 8, padding: '8px 14px' }}
+              className="flex items-center rounded-lg text-xs font-medium text-sage-dark dark:text-sage hover:bg-sage/10 dark:hover:bg-sage/10 transition-all duration-200 border border-sage/15 dark:border-sage-dark/20 shrink-0"
+              style={{ gap: 6, padding: isMobile ? '6px 10px' : '8px 14px' }}
             >
               <ArrowLeft className="w-3 h-3" />
-              Yard
+              {!isMobile && 'Yard'}
             </button>
-            <span className="text-sage/25 dark:text-sage-dark/40 select-none">/</span>
-            <div className="flex items-center" style={{ gap: 12 }}>
+            {!isMobile && <span className="text-sage/25 dark:text-sage-dark/40 select-none">/</span>}
+            <div className="flex items-center" style={{ gap: 8 }}>
               <span className="text-base leading-none">{isQuadrantView ? '✦' : activePlot.icon}</span>
-              <h2 className="font-display text-lg font-semibold text-forest-deep dark:text-cream">
+              <h2 className={`font-display font-semibold text-forest-deep dark:text-cream ${isMobile ? 'text-sm' : 'text-lg'}`}>
                 {isQuadrantView ? 'Quadrant Garden' : activePlot.name}
               </h2>
             </div>
-            <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/70 dark:text-sage/70 ml-1">
-              {plotWidthFt}' x {plotHeightFt}' · {activePlot.plants.length} plants
-            </span>
+            {!isMobile && (
+              <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/70 dark:text-sage/70 ml-1">
+                {plotWidthFt}' x {plotHeightFt}' · {activePlot.plants.length} plants
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center" style={{ gap: 16 }}>
+          <div className="flex items-center" style={{ gap: isMobile ? 6 : 16 }}>
             {/* View toggle */}
             <div className="flex bg-sage/8 dark:bg-sage/12 rounded-lg" style={{ padding: 3 }}>
               <button
                 onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'planted' })}
-                style={{ padding: '8px 14px', gap: 8 }}
+                style={{ padding: isMobile ? '6px 8px' : '8px 14px', gap: 6 }}
                 className={`rounded-md text-xs font-medium transition-all duration-200 flex items-center ${
                   state.viewMode === 'planted'
                     ? 'bg-white dark:bg-midnight-sage text-forest dark:text-cream shadow-sm'
                     : 'text-sage-dark dark:text-sage hover:text-forest dark:hover:text-cream'
                 }`}
+                title="Seedling view"
               >
                 <Sprout className="w-3.5 h-3.5" />
-                Seedling
+                {!isMobile && 'Seedling'}
               </button>
               <button
                 onClick={() => dispatch({ type: 'SET_VIEW_MODE', payload: 'fullgrown' })}
-                style={{ padding: '8px 14px', gap: 8 }}
+                style={{ padding: isMobile ? '6px 8px' : '8px 14px', gap: 6 }}
                 className={`rounded-md text-xs font-medium transition-all duration-200 flex items-center ${
                   state.viewMode === 'fullgrown'
                     ? 'bg-white dark:bg-midnight-sage text-forest dark:text-cream shadow-sm'
                     : 'text-sage-dark dark:text-sage hover:text-forest dark:hover:text-cream'
                 }`}
+                title="Full grown view"
               >
                 <Flower2 className="w-3.5 h-3.5" />
-                Full Grown
+                {!isMobile && 'Full Grown'}
               </button>
             </div>
 
@@ -1312,6 +1337,21 @@ function PlotEditor() {
           onMouseUp={handleMouseUp}
           onMouseLeave={(e) => { setIsPanning(false); if (movingItem) handleMouseUp(e); }}
           onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              const touch = e.touches[0];
+              handleMouseDown({ clientX: touch.clientX, clientY: touch.clientY, button: 0, preventDefault: () => {} });
+            }
+          }}
+          onTouchMove={(e) => {
+            if (e.touches.length === 1) {
+              const touch = e.touches[0];
+              handleMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
+            }
+          }}
+          onTouchEnd={(e) => {
+            handleMouseUp({ clientX: 0, clientY: 0, preventDefault: () => {} });
+          }}
         >
           {/* Height legend — only in full-grown view */}
           {state.viewMode === 'fullgrown' && (

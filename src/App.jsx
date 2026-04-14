@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { Component, useState, useEffect } from 'react';
 import { AuthProvider } from './AuthContext';
 import AuthGate from './components/AuthGate';
 import { StoreProvider, useStore } from './store';
@@ -42,8 +42,20 @@ class ErrorBoundary extends Component {
   }
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < breakpoint);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 function AppContent() {
   const { state } = useStore();
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!state.onboardingComplete) {
     return <Onboarding />;
@@ -59,9 +71,41 @@ function AppContent() {
 
   return (
     <div className={`flex h-full overflow-hidden ${state.darkMode ? 'dark' : ''}`}>
-      <Sidebar />
+      {/* Mobile hamburger button */}
+      {isMobile && !sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-3 left-3 z-50 w-10 h-10 rounded-xl bg-white/90 dark:bg-midnight-green/90 border border-sage/20 dark:border-sage-dark/30 shadow-lg flex items-center justify-center backdrop-blur-sm"
+          aria-label="Open menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-forest-deep dark:text-cream">
+            <line x1="3" y1="4.5" x2="15" y2="4.5" />
+            <line x1="3" y1="9" x2="15" y2="9" />
+            <line x1="3" y1="13.5" x2="15" y2="13.5" />
+          </svg>
+        </button>
+      )}
+
+      {/* Sidebar — overlay on mobile, static on desktop */}
+      {isMobile ? (
+        <>
+          {sidebarOpen && (
+            <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setSidebarOpen(false)} />
+          )}
+          <div
+            className={`fixed top-0 left-0 h-full z-50 transition-transform duration-300 ease-out ${
+              sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <Sidebar onNavigate={() => setSidebarOpen(false)} />
+          </div>
+        </>
+      ) : (
+        <Sidebar />
+      )}
+
       <main className="flex-1 overflow-hidden bg-cream dark:bg-midnight">
-        <ActiveView />
+        <ActiveView isMobile={isMobile} />
       </main>
     </div>
   );

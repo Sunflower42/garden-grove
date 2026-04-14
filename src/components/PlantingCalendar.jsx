@@ -132,8 +132,8 @@ export default function PlantingCalendar() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-sage/10 dark:border-sage-dark/15" style={{ padding: '40px 40px 32px' }}>
-        <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream">
+      <div className="border-b border-sage/10 dark:border-sage-dark/15 px-5 py-6 sm:px-10 sm:py-10 sm:pb-8">
+        <h2 className="font-display text-xl sm:text-2xl font-semibold text-forest-deep dark:text-cream">
           Planting Calendar
         </h2>
         <p className="text-sm text-sage-dark/70 dark:text-sage/60" style={{ marginTop: 12 }}>

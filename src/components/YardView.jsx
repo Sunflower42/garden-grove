@@ -68,7 +68,7 @@ function polyArea(shape) {
   return Math.abs(area / 2);
 }
 
-export default function YardView() {
+export default function YardView({ isMobile }) {
   const { state, dispatch, canUndo } = useStore();
   const containerRef = useRef(null);
   const [zoom, setZoom] = useState(null);
@@ -1152,17 +1152,19 @@ export default function YardView() {
   return (
     <div className="h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar relative z-20 flex-wrap" style={{ padding: '12px 24px', gap: 8 }}>
-        <div className="flex items-center" style={{ gap: 12 }}>
-          <div className="w-7 h-7 rounded-lg bg-terra/10 flex items-center justify-center">
+      <div className="flex items-center justify-between border-b border-sage/10 dark:border-sage-dark/15 bg-white/60 dark:bg-midnight-green/60 toolbar relative z-20 flex-wrap" style={{ padding: isMobile ? '10px 12px 10px 48px' : '12px 24px', gap: 8 }}>
+        <div className="flex items-center" style={{ gap: isMobile ? 8 : 12 }}>
+          <div className="w-7 h-7 rounded-lg bg-terra/10 flex items-center justify-center shrink-0">
             <Home className="w-3.5 h-3.5 text-terra" />
           </div>
-          <h2 className="font-display text-lg font-semibold text-forest-deep dark:text-cream">
+          <h2 className={`font-display font-semibold text-forest-deep dark:text-cream ${isMobile ? 'text-base' : 'text-lg'}`}>
             My Yard
           </h2>
-          <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/70 dark:text-sage/60">
-            {state.yardWidthFt}' x {state.yardHeightFt}' · {state.plots.length} garden{state.plots.length !== 1 ? 's' : ''}
-          </span>
+          {!isMobile && (
+            <span className="badge bg-sage/8 dark:bg-sage/12 text-sage-dark/70 dark:text-sage/60">
+              {state.yardWidthFt}' x {state.yardHeightFt}' · {state.plots.length} garden{state.plots.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
         <div className="flex items-center" style={{ gap: 10 }}>
           {/* Add plot */}

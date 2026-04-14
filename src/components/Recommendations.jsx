@@ -41,7 +41,7 @@ export default function Recommendations() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-sage/10 dark:border-sage-dark/15" style={{ padding: '40px 40px 32px' }}>
+      <div className="border-b border-sage/10 dark:border-sage-dark/15 px-5 py-6 sm:px-10 sm:py-10 sm:pb-8">
         <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream">
           Garden Recommendations
         </h2>
@@ -54,7 +54,7 @@ export default function Recommendations() {
       </div>
 
       {/* Tips */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: 40 }}>
+      <div className="flex-1 overflow-y-auto p-5 sm:p-10">
         <div className="max-w-2xl" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {displayTips.map((tip, i) => {
             const style = TYPE_STYLES[tip.type] || TYPE_STYLES.enhancement;

@@ -15,11 +15,16 @@ const NAV_ITEMS = [
   { id: 'recommendations', label: 'Recommendations', icon: Lightbulb },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }) {
   const { state, dispatch } = useStore();
   const { user, signOut } = useAuth();
   const [plotsOpen, setPlotsOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+
+  const navigate = (action) => {
+    action();
+    onNavigate?.();
+  };
 
   return (
     <aside className="h-full flex flex-col border-r border-sage/15 bg-cream-dark dark:bg-midnight-green dark:border-sage-dark/20 grain-texture shrink-0" style={{ width: 264 }}>
@@ -64,7 +69,7 @@ export default function Sidebar() {
           return (
             <button
               key={item.id}
-              onClick={() => dispatch({ type: 'SET_VIEW', payload: item.id })}
+              onClick={() => navigate(() => dispatch({ type: 'SET_VIEW', payload: item.id }))}
               style={{ padding: '10px 16px', gap: 12 }}
               className={`w-full flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${
                 active
@@ -117,10 +122,10 @@ export default function Sidebar() {
                     ? 'bg-sage/12 text-forest dark:bg-sage/15 dark:text-cream shadow-sm'
                     : 'text-soil-light dark:text-sage hover:bg-sage/8 dark:hover:bg-sage/8 hover:text-forest-deep dark:hover:text-cream'
                 }`}
-                onClick={() => {
+                onClick={() => navigate(() => {
                   dispatch({ type: 'SET_ACTIVE_PLOT', payload: null });
                   dispatch({ type: 'SET_VIEW', payload: 'planner' });
-                }}
+                })}
               >
                 <span className="text-base leading-none">🏡</span>
                 <span className="flex-1 truncate font-medium">Yard Overview</span>
@@ -146,10 +151,10 @@ export default function Sidebar() {
                             ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light shadow-sm'
                             : 'text-soil-light dark:text-sage hover:bg-terra/5 dark:hover:bg-terra/8 hover:text-soil dark:hover:text-cream'
                         }`}
-                        onClick={() => {
+                        onClick={() => navigate(() => {
                           dispatch({ type: 'SET_ACTIVE_PLOT', payload: siblings[0].id });
                           dispatch({ type: 'SET_VIEW', payload: 'planner' });
-                        }}
+                        })}
                       >
                         <span className="text-sm leading-none">✦</span>
                         <span className="flex-1 truncate font-medium">Quadrant Garden</span>
@@ -181,10 +186,10 @@ export default function Sidebar() {
                             ? 'bg-terra/10 text-terra-dark dark:bg-terra/15 dark:text-terra-light shadow-sm'
                             : 'text-soil-light dark:text-sage hover:bg-terra/5 dark:hover:bg-terra/8 hover:text-soil dark:hover:text-cream'
                         }`}
-                        onClick={() => {
+                        onClick={() => navigate(() => {
                           dispatch({ type: 'SET_ACTIVE_PLOT', payload: plot.id });
                           dispatch({ type: 'SET_VIEW', payload: 'planner' });
-                        }}
+                        })}
                       >
                         <span className="text-sm leading-none">{plot.icon}</span>
                         <span className="flex-1 truncate font-medium">{plot.name}</span>

@@ -572,6 +572,26 @@ export const ELEMENTS = [
     borderColor: '#3A2A1A',
     description: 'Feed your garden! Black gold production station.',
   },
+  {
+    id: 'beehive',
+    name: 'Beehive',
+    category: 'structure',
+    widthIn: 20,
+    heightIn: 24,
+    color: '#D4A84A',
+    borderColor: '#A07830',
+    description: 'Langstroth hive — pollinators boost yields across the garden',
+  },
+  {
+    id: 'beehive-top-bar',
+    name: 'Top Bar Hive',
+    category: 'structure',
+    widthIn: 24,
+    heightIn: 48,
+    color: '#C4985A',
+    borderColor: '#8A6A3A',
+    description: 'Horizontal top bar hive — beginner-friendly, natural comb',
+  },
 
   // Pool
   {

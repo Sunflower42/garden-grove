@@ -159,3 +159,30 @@ body {
   font-weight: 500;
   line-height: 1.4;
 }
+
+/* Mobile responsiveness */
+@media (max-width: 767px) {
+  /* Make toolbars wrap gracefully */
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Ensure touch targets are at least 44px */
+  button, [role="button"] {
+    min-height: 36px;
+  }
+
+  /* Prevent text overflow in tight layouts */
+  .truncate-mobile {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+  }
+
+  /* Scroll containers get momentum scrolling */
+  .overflow-y-auto, .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

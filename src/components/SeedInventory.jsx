@@ -705,10 +705,10 @@ export default function SeedInventory() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="border-b border-sage/10 dark:border-sage-dark/15" style={{ padding: '32px 40px 0' }}>
+      <div className="border-b border-sage/10 dark:border-sage-dark/15 px-4 pt-6 sm:px-10 sm:pt-8 pb-0">
         {/* Top row: title + smart search + view toggle */}
-        <div className="flex items-center" style={{ gap: 16 }}>
-          <h2 className="font-display text-2xl font-semibold text-forest-deep dark:text-cream shrink-0">
+        <div className="flex items-center flex-wrap" style={{ gap: 12 }}>
+          <h2 className="font-display text-xl sm:text-2xl font-semibold text-forest-deep dark:text-cream shrink-0">
             Garden Inventory
           </h2>
           {state.seedInventory.length > 0 && (
@@ -940,7 +940,7 @@ export default function SeedInventory() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: '32px 40px' }}>
+      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
         {/* Variety info preview — local DB or web lookup */}
         {quickPlant && quickVarietyInfo && (
           <div className="rounded-xl bg-sage/6 dark:bg-sage/8 text-[11px] text-sage-dark/60 dark:text-sage/50 border border-sage/10 dark:border-sage-dark/15" style={{ padding: '12px 16px', marginBottom: 20 }}>

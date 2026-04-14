@@ -916,6 +916,72 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
           {/* Outline */}
           <rect x={px} y={py} width={w} height={h} fill="none" stroke="#6B4B2A" strokeWidth={1} rx={1} opacity={0.6} />
         </g>
+      ) : element.id === 'beehive' ? (
+        // Langstroth beehive — stacked boxes with landing board
+        <g>
+          {/* Base/bottom board */}
+          <rect x={px + w * 0.05} y={py + h * 0.88} width={w * 0.9} height={h * 0.12}
+            fill="#8A6A3A" stroke="#6A4A1A" strokeWidth={1} rx={1} opacity={0.9} />
+          {/* Landing board sticking out front */}
+          <rect x={px + w * 0.3} y={py + h * 0.92} width={w * 0.4} height={h * 0.1}
+            fill="#9A7A4A" opacity={0.7} rx={0.5} />
+          {/* Bottom brood box */}
+          <rect x={px + w * 0.08} y={py + h * 0.58} width={w * 0.84} height={h * 0.32}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.2} rx={1.5} opacity={0.9} />
+          {/* Handle groove on bottom box */}
+          <rect x={px + w * 0.25} y={py + h * 0.72} width={w * 0.5} height={h * 0.03}
+            fill={element.borderColor} opacity={0.4} rx={0.5} />
+          {/* Top super box */}
+          <rect x={px + w * 0.08} y={py + h * 0.28} width={w * 0.84} height={h * 0.32}
+            fill="#DEAD5A" stroke={element.borderColor} strokeWidth={1.2} rx={1.5} opacity={0.9} />
+          {/* Handle groove on top box */}
+          <rect x={px + w * 0.25} y={py + h * 0.42} width={w * 0.5} height={h * 0.03}
+            fill={element.borderColor} opacity={0.4} rx={0.5} />
+          {/* Inner cover */}
+          <rect x={px + w * 0.06} y={py + h * 0.22} width={w * 0.88} height={h * 0.08}
+            fill="#B8985A" stroke={element.borderColor} strokeWidth={0.8} rx={1} opacity={0.85} />
+          {/* Telescoping outer cover (roof) */}
+          <rect x={px + w * 0.02} y={py + h * 0.08} width={w * 0.96} height={h * 0.16}
+            fill="#7A6A4A" stroke="#5A4A2A" strokeWidth={1} rx={2} opacity={0.9} />
+          {/* Roof cap highlight */}
+          <rect x={px + w * 0.04} y={py + h * 0.09} width={w * 0.92} height={h * 0.04}
+            fill="#8A7A5A" opacity={0.4} rx={1} />
+          {/* Tiny bee */}
+          <text x={px + w * 0.75} y={py + h * 0.2} fontSize={Math.min(w, h) * 0.18} opacity={0.5}>🐝</text>
+        </g>
+      ) : element.id === 'beehive-top-bar' ? (
+        // Top bar hive — long horizontal box on legs
+        <g>
+          {/* Legs */}
+          <rect x={px + w * 0.12} y={py + h * 0.75} width={w * 0.06} height={h * 0.25}
+            fill="#6A4A2A" rx={0.5} opacity={0.8} />
+          <rect x={px + w * 0.82} y={py + h * 0.75} width={w * 0.06} height={h * 0.25}
+            fill="#6A4A2A" rx={0.5} opacity={0.8} />
+          {/* Main body — trapezoidal shape (wider at top) */}
+          <path
+            d={`M ${px + w * 0.05} ${py + h * 0.25} L ${px + w * 0.95} ${py + h * 0.25} L ${px + w * 0.85} ${py + h * 0.78} L ${px + w * 0.15} ${py + h * 0.78} Z`}
+            fill={element.color} stroke={element.borderColor} strokeWidth={1.2} opacity={0.9}
+          />
+          {/* Top bars visible on top */}
+          {Array.from({ length: Math.max(3, Math.floor(w / 4)) }).map((_, i) => {
+            const bx = px + w * 0.08 + i * ((w * 0.84) / Math.max(2, Math.floor(w / 4)));
+            return (
+              <line key={i} x1={bx} y1={py + h * 0.25} x2={bx} y2={py + h * 0.27}
+                stroke={element.borderColor} strokeWidth={0.5} opacity={0.5} />
+            );
+          })}
+          {/* Roof / cover */}
+          <rect x={px + w * 0.02} y={py + h * 0.12} width={w * 0.96} height={h * 0.15}
+            fill="#8A6A3A" stroke="#6A4A1A" strokeWidth={1} rx={1.5} opacity={0.9} />
+          {/* Roof peak highlight */}
+          <rect x={px + w * 0.04} y={py + h * 0.13} width={w * 0.92} height={h * 0.04}
+            fill="#9A7A4A" opacity={0.4} rx={1} />
+          {/* Entry hole */}
+          <circle cx={px + w * 0.15} cy={py + h * 0.52} r={Math.min(w, h) * 0.04}
+            fill="#3A2A1A" opacity={0.7} />
+          {/* Tiny bee */}
+          <text x={px + w * 0.08} y={py + h * 0.48} fontSize={Math.min(w, h) * 0.12} opacity={0.5}>🐝</text>
+        </g>
       ) : (
         // Default rectangle
         <rect
