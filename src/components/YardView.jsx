@@ -109,8 +109,10 @@ export default function YardView({ isMobile }) {
   useEffect(() => {
     if (state.editYardMode) {
       setEditingHouse(true);
-      dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: {} }); // no-op to clear flag
-      // Clear the flag after entering edit mode
+      // Auto-show satellite overlay if available
+      if (state.satelliteUrl || state.yardGeoVertices) {
+        setShowSatellite(true);
+      }
       setTimeout(() => dispatch({ type: 'CLEAR_EDIT_YARD_MODE' }), 100);
     }
   }, [state.editYardMode]);
