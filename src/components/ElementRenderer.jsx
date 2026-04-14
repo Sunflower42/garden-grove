@@ -756,6 +756,27 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
             );
           })}
         </g>
+      ) : element.id === 'pool-round' ? (
+        // Round pool — circular water with coping
+        <g>
+          {/* Pool coping (border) */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2 + 2} ry={h / 2 + 2}
+            fill="#C4B8A8" opacity={0.9} />
+          {/* Water */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+            fill="#5BA4CF" stroke="#3A7AAA" strokeWidth={1} opacity={0.85} />
+          {/* Lighter center */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.35} ry={h * 0.35}
+            fill="#7EC4E8" opacity={0.4} />
+          {/* Water ripple highlights */}
+          <ellipse cx={px + w * 0.4} cy={py + h * 0.4} rx={w * 0.1} ry={h * 0.04}
+            fill="#A8DCF0" opacity={0.3} />
+          <ellipse cx={px + w * 0.6} cy={py + h * 0.55} rx={w * 0.08} ry={h * 0.03}
+            fill="#A8DCF0" opacity={0.25} />
+          {/* Steps indicator */}
+          <ellipse cx={px + w / 2} cy={py + h * 0.12} rx={w * 0.15} ry={h * 0.05}
+            fill="#7EC4E8" opacity={0.5} />
+        </g>
       ) : element.id === 'pool' ? (
         // Swimming pool — water with lane lines and coping
         <g>

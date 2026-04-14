@@ -608,6 +608,19 @@ export const ELEMENTS = [
   },
 
   {
+    id: 'pool-round',
+    name: 'Round Pool',
+    category: 'hardscape',
+    widthIn: 180,
+    heightIn: 180,
+    color: '#5BA4CF',
+    borderColor: '#3A7AAA',
+    description: 'Circular in-ground pool — resize to fit',
+    circular: true,
+    resizable: true,
+  },
+
+  {
     id: 'concrete-bench',
     name: 'Concrete Bench',
     category: 'hardscape',
