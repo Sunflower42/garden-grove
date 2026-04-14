@@ -687,7 +687,9 @@ function reducer(state, action) {
       return { ...state, onboardingComplete: false, onboardingStartStep: 0 };
 
     case 'EDIT_YARD':
-      return { ...state, onboardingComplete: false, onboardingStartStep: 2 };
+      return { ...state, activeView: 'planner', activePlotId: null, editYardMode: true };
+    case 'CLEAR_EDIT_YARD_MODE':
+      return { ...state, editYardMode: false };
 
     // Yard-level elements
     case 'PLACE_YARD_ELEMENT': {

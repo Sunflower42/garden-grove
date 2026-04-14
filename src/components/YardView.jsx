@@ -104,7 +104,16 @@ export default function YardView({ isMobile }) {
   const [houseFeatureMenu, setHouseFeatureMenu] = useState(null); // { edgeIndex, t, screenX, screenY }
   const [selectedHouseFeature, setSelectedHouseFeature] = useState(null); // feature id
   const [draggingHouseFeature, setDraggingHouseFeature] = useState(null); // feat id being dragged along wall
-  const [editingHouse, setEditingHouse] = useState(false); // toggle house polygon vertex editing
+  const [editingHouse, setEditingHouse] = useState(state.editYardMode || false); // toggle house polygon vertex editing
+  // Auto-enable yard editing mode from settings
+  useEffect(() => {
+    if (state.editYardMode) {
+      setEditingHouse(true);
+      dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: {} }); // no-op to clear flag
+      // Clear the flag after entering edit mode
+      setTimeout(() => dispatch({ type: 'CLEAR_EDIT_YARD_MODE' }), 100);
+    }
+  }, [state.editYardMode]);
   const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
   const [editingElementShape, setEditingElementShape] = useState(null); // yard element id being shape-edited
   const [draggingElementVertex, setDraggingElementVertex] = useState(null); // { id, vertexIndex }
