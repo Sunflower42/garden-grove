@@ -710,6 +710,10 @@ function reducer(state, action) {
           if (el.polygon) {
             updated.polygon = el.polygon.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
           }
+          // Also translate smooth path points
+          if (el.smoothPath) {
+            updated.smoothPath = { ...el.smoothPath, points: el.smoothPath.points.map(pt => ({ x: pt.x + dx, y: pt.y + dy })) };
+          }
           return updated;
         }),
       };
@@ -738,6 +742,9 @@ function reducer(state, action) {
         y: source.y + (offsetY || 2),
         polygon: source.polygon
           ? source.polygon.map(pt => ({ x: pt.x + (offsetX || 2), y: pt.y + (offsetY || 2) }))
+          : undefined,
+        smoothPath: source.smoothPath
+          ? { ...source.smoothPath, points: source.smoothPath.points.map(pt => ({ x: pt.x + (offsetX || 2), y: pt.y + (offsetY || 2) })) }
           : undefined,
       };
       return { ...state, yardElements: [...state.yardElements, dup] };
@@ -780,6 +787,74 @@ function reducer(state, action) {
         }),
       };
     }
+    // Smooth planting bed operations
+    case 'PLACE_SMOOTH_BED': {
+      const { points, tension, modes } = action.payload;
+      const xs = points.map(p => p.x), ys = points.map(p => p.y);
+      const el = {
+        id: `yel-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        elementId: 'planting-bed',
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+        rotation: 0,
+        smoothPath: { points, tension: tension || 0.5, modes: modes || points.map(() => 'smooth'), closed: true },
+      };
+      return { ...state, yardElements: [...state.yardElements, el] };
+    }
+    case 'UPDATE_SMOOTH_PATH': {
+      const { id, ...updates } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id || !el.smoothPath) return el;
+          const sp = { ...el.smoothPath, ...updates };
+          // Recompute bounding box
+          const xs = sp.points.map(p => p.x), ys = sp.points.map(p => p.y);
+          return { ...el, smoothPath: sp, x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+        }),
+      };
+    }
+    case 'ADD_SMOOTH_PATH_POINT': {
+      const { id, index, point } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id || !el.smoothPath) return el;
+          const newPoints = [...el.smoothPath.points];
+          const newModes = [...el.smoothPath.modes];
+          newPoints.splice(index, 0, point);
+          newModes.splice(index, 0, 'smooth');
+          return { ...el, smoothPath: { ...el.smoothPath, points: newPoints, modes: newModes } };
+        }),
+      };
+    }
+    case 'REMOVE_SMOOTH_PATH_POINT': {
+      const { id, index } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id || !el.smoothPath || el.smoothPath.points.length <= 3) return el;
+          const newPoints = el.smoothPath.points.filter((_, i) => i !== index);
+          const newModes = el.smoothPath.modes.filter((_, i) => i !== index);
+          return { ...el, smoothPath: { ...el.smoothPath, points: newPoints, modes: newModes } };
+        }),
+      };
+    }
+    case 'TOGGLE_SMOOTH_PATH_MODE': {
+      const { id, index } = action.payload;
+      return {
+        ...state,
+        yardElements: state.yardElements.map(el => {
+          if (el.id !== id || !el.smoothPath) return el;
+          const newModes = [...el.smoothPath.modes];
+          newModes[index] = newModes[index] === 'smooth' ? 'sharp' : 'smooth';
+          return { ...el, smoothPath: { ...el.smoothPath, modes: newModes } };
+        }),
+      };
+    }
+
     case 'ADD_HOUSE_FEATURE': {
       const { type, edgeIndex, t, widthFt } = action.payload;
       const feat = {

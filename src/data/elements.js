@@ -351,6 +351,18 @@ export const ELEMENTS = [
   },
 
   {
+    id: 'planting-bed',
+    name: 'Planting Bed',
+    category: 'path',
+    widthIn: 72,
+    heightIn: 48,
+    color: '#5A7A3A',
+    borderColor: '#4A6A2A',
+    description: 'Click to draw a smooth planting bed outline',
+    smoothEditable: true,
+  },
+
+  {
     id: 'shrub-border',
     name: 'Shrub Border',
     category: 'path',

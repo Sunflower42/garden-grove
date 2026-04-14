@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ELEMENTS, ELEMENT_CATEGORIES, getElementById } from '../data/elements';
 import { ElementSVG } from './ElementRenderer';
+import { smoothPath, smoothPathArea } from '../utils/splines';
 
 const PLOT_TEMPLATES = [
   { name: 'Kitchen Garden', icon: '🥬', w: 12, h: 8 },
@@ -107,6 +108,12 @@ export default function YardView({ isMobile }) {
   const [draggingHouseVertex, setDraggingHouseVertex] = useState(null); // vertex index
   const [editingElementShape, setEditingElementShape] = useState(null); // yard element id being shape-edited
   const [draggingElementVertex, setDraggingElementVertex] = useState(null); // { id, vertexIndex }
+
+  // Smooth bed drawing mode
+  const [drawingBed, setDrawingBed] = useState(null); // { points: [{x,y}], tension: 0.5 }
+  const [drawingCursor, setDrawingCursor] = useState(null); // {x,y} — live cursor pos in feet
+  // Smooth bed vertex editing
+  const [draggingSmoothVertex, setDraggingSmoothVertex] = useState(null); // { id, vertexIndex }
 
   // Copy/paste clipboard
   const [clipboardElement, setClipboardElement] = useState(null); // copied yard element data
@@ -335,8 +342,8 @@ export default function YardView({ isMobile }) {
       }
     }
 
-    // Default: pan (skip if placing element)
-    if (!placingElement && (e.button === 0 || e.button === 1)) {
+    // Default: pan (skip if placing element or drawing bed)
+    if (!placingElement && !drawingBed && (e.button === 0 || e.button === 1)) {
       e.preventDefault();
       setIsPanning(true);
       setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -369,6 +376,24 @@ export default function YardView({ isMobile }) {
         dispatch({ type: 'UPDATE_YARD_ELEMENT_POLYGON', payload: { id: el.id, polygon: newPoly } });
       }
       return;
+    }
+    // Smooth bed vertex dragging
+    if (draggingSmoothVertex) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const el = state.yardElements.find(y => y.id === draggingSmoothVertex.id);
+      if (el?.smoothPath) {
+        const newPoints = [...el.smoothPath.points];
+        newPoints[draggingSmoothVertex.vertexIndex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
+        dispatch({ type: 'UPDATE_SMOOTH_PATH', payload: { id: el.id, points: newPoints } });
+      }
+      return;
+    }
+    // Drawing bed cursor tracking
+    if (drawingBed && containerRef.current && zoom && panOffset) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const svgX = (e.clientX - rect.left - panOffset.x) / zoom;
+      const svgY = (e.clientY - rect.top - panOffset.y) / zoom;
+      setDrawingCursor({ x: Math.round(svgX / SCALE * 2) / 2, y: Math.round(svgY / SCALE * 2) / 2 });
     }
     // House feature dragging along wall edges
     if (draggingHouseFeature && state.housePolygon) {
@@ -561,6 +586,7 @@ export default function YardView({ isMobile }) {
     if (draggingHouseVertex !== null) { setDraggingHouseVertex(null); return; }
     if (draggingHouseFeature) { setDraggingHouseFeature(null); return; }
     if (draggingElementVertex) { setDraggingElementVertex(null); return; }
+    if (draggingSmoothVertex) { setDraggingSmoothVertex(null); return; }
     if (draggingYardElement) { setDraggingYardElement(null); return; }
     if (resizingYardElement) { setResizingYardElement(null); return; }
     if (rotatingYardElement) { setRotatingYardElement(null); return; }
@@ -1014,6 +1040,9 @@ export default function YardView({ isMobile }) {
         setEditingElementShape(null);
         setDraggingElementVertex(null);
         setDraggingVertex(null);
+        setDrawingBed(null);
+        setDrawingCursor(null);
+        setDraggingSmoothVertex(null);
         setMovingPlot(null);
         setMultiSelectedPlots(new Set());
         setMultiSelectedElements(new Set());
@@ -1392,6 +1421,54 @@ export default function YardView({ isMobile }) {
             );
           })()}
 
+          {/* Edit Smooth Bed — for smooth-path elements */}
+          {(() => {
+            if (!selectedYardElement) return null;
+            const el = state.yardElements.find(y => y.id === selectedYardElement);
+            if (!el?.smoothPath) return null;
+            const isEditing = editingElementShape === el.id;
+            return (
+              <>
+                <button
+                  onClick={() => {
+                    if (isEditing) {
+                      setEditingElementShape(null);
+                      setDraggingSmoothVertex(null);
+                    } else {
+                      setEditingElementShape(el.id);
+                      setEditingHouse(false);
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
+                    isEditing
+                      ? 'bg-terra text-cream'
+                      : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
+                  }`}
+                >
+                  <GripVertical className="w-3.5 h-3.5" /> {isEditing ? 'Done Editing' : 'Edit Shape'}
+                </button>
+                {/* Tension slider */}
+                <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20" style={{ padding: '3px 10px' }}>
+                  <span className="text-[10px] text-sage-dark/60 dark:text-sage/60 font-medium whitespace-nowrap">Curve</span>
+                  <input
+                    type="range" min="0" max="100" step="5"
+                    value={Math.round(el.smoothPath.tension * 100)}
+                    onChange={(e) => {
+                      dispatch({ type: 'UPDATE_SMOOTH_PATH', payload: { id: el.id, tension: parseInt(e.target.value) / 100 } });
+                    }}
+                    className="w-16 h-1 accent-terra"
+                    title={`Tension: ${Math.round(el.smoothPath.tension * 100)}%`}
+                  />
+                </div>
+                {isEditing && (
+                  <span className="text-[10px] text-sage-dark/50 dark:text-sage/40">
+                    Drag points · Right-click to toggle sharp/smooth · Shift+right-click to delete
+                  </span>
+                )}
+              </>
+            );
+          })()}
+
           {/* Layer & Copy controls — visible when a yard element is selected */}
           {selectedYardElement && (() => {
             const el = state.yardElements.find(y => y.id === selectedYardElement);
@@ -1507,11 +1584,11 @@ export default function YardView({ isMobile }) {
                   : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
               }`}
             >
-              <Fence className="w-3.5 h-3.5" /> {placingElement ? 'Placing...' : 'Add Element'}
+              <Fence className="w-3.5 h-3.5" /> {drawingBed ? 'Drawing Bed...' : placingElement ? 'Placing...' : 'Add Element'}
             </button>
-            {placingElement && (
+            {(placingElement || drawingBed) && (
               <button
-                onClick={() => { setPlacingElement(null); setElementPreviewPos(null); }}
+                onClick={() => { setPlacingElement(null); setElementPreviewPos(null); setDrawingBed(null); setDrawingCursor(null); }}
                 className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-bloom-red text-white flex items-center justify-center"
               >
                 <X className="w-2.5 h-2.5" />
@@ -1554,6 +1631,13 @@ export default function YardView({ isMobile }) {
                           <button
                             key={elem.id}
                             onClick={() => {
+                              // Smooth-editable elements enter drawing mode
+                              if (elem.smoothEditable) {
+                                setDrawingBed({ points: [], tension: 0.5 });
+                                setShowElementMenu(false);
+                                setPlacingElement({ elementId: elem.id });
+                                return;
+                              }
                               // Place immediately at center of current view, then drag to position
                               const rect = containerRef.current?.getBoundingClientRect();
                               if (rect && zoom && panOffset) {
@@ -1756,7 +1840,30 @@ export default function YardView({ isMobile }) {
         onMouseLeave={() => { setIsPanning(false); }}
         onContextMenu={handleContextMenu}
         onClick={(e) => {
-          if (!draggingVertex && !draggingElementVertex && !movingPlot && !draggingYardElement) {
+          // Drawing bed mode — click to add points
+          if (drawingBed && containerRef.current && zoom && panOffset) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const svgX = (e.clientX - rect.left - panOffset.x) / zoom;
+            const svgY = (e.clientY - rect.top - panOffset.y) / zoom;
+            const ftX = Math.round(svgX / SCALE * 2) / 2;
+            const ftY = Math.round(svgY / SCALE * 2) / 2;
+            // If clicking near first point and we have 3+, close the shape
+            if (drawingBed.points.length >= 3) {
+              const first = drawingBed.points[0];
+              const dist = Math.sqrt((ftX - first.x) ** 2 + (ftY - first.y) ** 2);
+              if (dist < 2) {
+                // Finalize
+                dispatch({ type: 'PLACE_SMOOTH_BED', payload: { points: drawingBed.points, tension: drawingBed.tension } });
+                setDrawingBed(null);
+                setDrawingCursor(null);
+                setPlacingElement(null);
+                return;
+              }
+            }
+            setDrawingBed({ ...drawingBed, points: [...drawingBed.points, { x: ftX, y: ftY }] });
+            return;
+          }
+          if (!draggingVertex && !draggingElementVertex && !movingPlot && !draggingYardElement && !elementPending) {
             dispatch({ type: 'SET_EDITING_PLOT', payload: null });
             setSelectedYardElement(null);
             setEditingElementShape(null);
@@ -1770,7 +1877,7 @@ export default function YardView({ isMobile }) {
         }}
       >
         <svg width="100%" height="100%"
-          style={{ cursor: draggingVertex ? 'grabbing' : rotatingPlot ? 'crosshair' : movingPlot ? 'grabbing' : isPanning ? 'grabbing' : 'default' }}>
+          style={{ cursor: drawingBed ? 'crosshair' : draggingVertex ? 'grabbing' : rotatingPlot ? 'crosshair' : movingPlot ? 'grabbing' : isPanning ? 'grabbing' : 'default' }}>
           {zoom !== null && panOffset !== null && <>
           <defs>
             {/* Grass texture pattern */}
@@ -2376,6 +2483,149 @@ export default function YardView({ isMobile }) {
               const elemData = getElementById(el.elementId);
               if (!elemData) return null;
               const isSelected = selectedYardElement === el.id;
+
+              // --- Smooth path bed rendering ---
+              if (el.smoothPath) {
+                const sp = el.smoothPath;
+                const isEditingSmooth = editingElementShape === el.id;
+                const pathD = smoothPath(sp.points, { tension: sp.tension, closed: sp.closed !== false, modes: sp.modes });
+                const area = Math.round(smoothPathArea(sp.points, { tension: sp.tension, closed: true, modes: sp.modes }));
+                const cx = sp.points.reduce((s, p) => s + p.x, 0) / sp.points.length;
+                const cy = sp.points.reduce((s, p) => s + p.y, 0) / sp.points.length;
+
+                return (
+                  <g key={el.id}
+                    style={{ cursor: draggingYardElement?.id === el.id ? 'grabbing' : 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedYardElement(el.id);
+                      dispatch({ type: 'SET_EDITING_PLOT', payload: null });
+                      setMultiSelectedElements(new Set());
+                      setMultiSelectedPlots(new Set());
+                    }}
+                    onMouseDown={(e) => {
+                      if (isEditingSmooth) {
+                        // Check if clicking near a vertex
+                        const svg = toSVG(e.clientX, e.clientY);
+                        const ftX = toFt(svg.x), ftY = toFt(svg.y);
+                        for (let i = 0; i < sp.points.length; i++) {
+                          const px = sp.points[i].x, py = sp.points[i].y;
+                          const dist = Math.sqrt((ftX - px) ** 2 + (ftY - py) ** 2);
+                          if (dist < 1.5 / (zoom || 1)) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setDraggingSmoothVertex({ id: el.id, vertexIndex: i });
+                            return;
+                          }
+                        }
+                        return; // don't drag whole element in edit mode
+                      }
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setSelectedYardElement(el.id);
+                      const svg = toSVG(e.clientX, e.clientY);
+                      setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
+                    }}
+                    onContextMenu={(e) => {
+                      if (isEditingSmooth) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Right-click near a vertex to delete it or toggle mode
+                        const svg = toSVG(e.clientX, e.clientY);
+                        const ftX = toFt(svg.x), ftY = toFt(svg.y);
+                        for (let i = 0; i < sp.points.length; i++) {
+                          const dist = Math.sqrt((ftX - sp.points[i].x) ** 2 + (ftY - sp.points[i].y) ** 2);
+                          if (dist < 1.5 / (zoom || 1)) {
+                            if (e.shiftKey) {
+                              dispatch({ type: 'REMOVE_SMOOTH_PATH_POINT', payload: { id: el.id, index: i } });
+                            } else {
+                              dispatch({ type: 'TOGGLE_SMOOTH_PATH_MODE', payload: { id: el.id, index: i } });
+                            }
+                            return;
+                          }
+                        }
+                        // Right-click on edge to add point
+                        const ftPoint = { x: Math.round(ftX * 2) / 2, y: Math.round(ftY * 2) / 2 };
+                        // Find closest edge
+                        let bestIdx = 1, bestDist = Infinity;
+                        for (let i = 0; i < sp.points.length; i++) {
+                          const j = (i + 1) % sp.points.length;
+                          const mx = (sp.points[i].x + sp.points[j].x) / 2;
+                          const my = (sp.points[i].y + sp.points[j].y) / 2;
+                          const d = Math.sqrt((ftX - mx) ** 2 + (ftY - my) ** 2);
+                          if (d < bestDist) { bestDist = d; bestIdx = j; }
+                        }
+                        dispatch({ type: 'ADD_SMOOTH_PATH_POINT', payload: { id: el.id, index: bestIdx, point: ftPoint } });
+                      }
+                    }}
+                  >
+                    {/* Smooth bed fill */}
+                    <path d={pathD} fill="#5A7A3A" stroke="#4A6A2A" strokeWidth={1.5} opacity={0.8}
+                      transform={`scale(${SCALE})`} />
+                    {/* Mulch texture */}
+                    {sp.points.length >= 3 && Array.from({ length: Math.min(30, Math.max(5, area / 3)) }).map((_, i) => {
+                      const angle = (i * 2.39996);
+                      const r = 0.3 + (i % 5) * 0.15;
+                      const px = cx + Math.cos(angle) * r * Math.sqrt(area) * 0.3;
+                      const py = cy + Math.sin(angle) * r * Math.sqrt(area) * 0.3;
+                      const shade = i % 4 === 0 ? '#6B9B4A' : i % 4 === 1 ? '#5A8A3A' : i % 4 === 2 ? '#3A5A1A' : '#7AAA5A';
+                      return <circle key={i} cx={px * SCALE} cy={py * SCALE} r={1.5} fill={shade} opacity={0.5} />;
+                    })}
+                    {/* Label */}
+                    <text x={cx * SCALE} y={cy * SCALE + 4} textAnchor="middle"
+                      fontSize={8} fontFamily="Outfit, sans-serif" fontWeight={500}
+                      fill="#F5E6CC" opacity={0.8} style={{ pointerEvents: 'none' }}>
+                      Planting Bed
+                    </text>
+                    <text x={cx * SCALE} y={cy * SCALE + 14} textAnchor="middle"
+                      fontSize={7} fontFamily="Outfit" fill="#D4C4A8" opacity={0.6}
+                      style={{ pointerEvents: 'none' }}>
+                      ~{area} sq ft
+                    </text>
+
+                    {/* Selection outline */}
+                    {isSelected && (
+                      <path d={pathD} fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray="6 3"
+                        transform={`scale(${SCALE})`} style={{ pointerEvents: 'none' }} />
+                    )}
+
+                    {/* Editing handles */}
+                    {isEditingSmooth && sp.points.map((pt, i) => {
+                      const isSharp = sp.modes[i] === 'sharp';
+                      return (
+                        <g key={`sv-${i}`}>
+                          {/* Invisible grab target */}
+                          <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={12 / zoom}
+                            fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }} />
+                          {/* Visible handle */}
+                          {isSharp ? (
+                            <rect x={pt.x * SCALE - 5 / zoom} y={pt.y * SCALE - 5 / zoom}
+                              width={10 / zoom} height={10 / zoom}
+                              fill="#C17644" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                              transform={`rotate(45 ${pt.x * SCALE} ${pt.y * SCALE})`}
+                              style={{ pointerEvents: 'none' }} />
+                          ) : (
+                            <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={5 / zoom}
+                              fill="#4A7A3A" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                              style={{ pointerEvents: 'none' }} />
+                          )}
+                        </g>
+                      );
+                    })}
+
+                    {/* Delete button */}
+                    {isSelected && !isEditingSmooth && (
+                      <g style={{ cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); dispatch({ type: 'REMOVE_YARD_ELEMENT', payload: el.id }); setSelectedYardElement(null); }}>
+                        <circle cx={(cx + Math.sqrt(area) * 0.4) * SCALE} cy={(cy - Math.sqrt(area) * 0.4) * SCALE} r={7 / zoom}
+                          fill="#C4544A" stroke="#FDF6E9" strokeWidth={1 / zoom} />
+                        <text x={(cx + Math.sqrt(area) * 0.4) * SCALE} y={(cy - Math.sqrt(area) * 0.4) * SCALE + 3 / zoom}
+                          textAnchor="middle" fontSize={9 / zoom} fontFamily="Outfit" fontWeight={700} fill="#FDF6E9">×</text>
+                      </g>
+                    )}
+                  </g>
+                );
+              }
               const isEditingShape = editingElementShape === el.id && el.polygon;
               const ex = el.x * SCALE, ey = el.y * SCALE;
               const ew = el.width * SCALE, eh = el.height * SCALE;
@@ -2761,6 +3011,58 @@ export default function YardView({ isMobile }) {
                 </g>
               );
             })}
+
+            {/* Drawing bed preview */}
+            {drawingBed && drawingBed.points.length > 0 && (() => {
+              const pts = drawingBed.points;
+              const previewPts = drawingCursor ? [...pts, drawingCursor] : pts;
+              const pathD = previewPts.length >= 3
+                ? smoothPath(previewPts, { tension: drawingBed.tension, closed: true })
+                : null;
+              return (
+                <g style={{ pointerEvents: 'none' }}>
+                  {/* Filled preview */}
+                  {pathD && (
+                    <path d={pathD} fill="#5A7A3A" stroke="#4A6A2A" strokeWidth={1.5}
+                      opacity={0.4} transform={`scale(${SCALE})`} />
+                  )}
+                  {/* Line from last point to cursor */}
+                  {drawingCursor && (
+                    <line
+                      x1={pts[pts.length - 1].x * SCALE} y1={pts[pts.length - 1].y * SCALE}
+                      x2={drawingCursor.x * SCALE} y2={drawingCursor.y * SCALE}
+                      stroke="#4A6A2A" strokeWidth={1} strokeDasharray="4 2" opacity={0.6}
+                    />
+                  )}
+                  {/* Line from cursor to first point (closing hint) */}
+                  {drawingCursor && pts.length >= 2 && (
+                    <line
+                      x1={drawingCursor.x * SCALE} y1={drawingCursor.y * SCALE}
+                      x2={pts[0].x * SCALE} y2={pts[0].y * SCALE}
+                      stroke="#4A6A2A" strokeWidth={0.5} strokeDasharray="2 3" opacity={0.3}
+                    />
+                  )}
+                  {/* Placed points */}
+                  {pts.map((pt, i) => (
+                    <g key={i}>
+                      <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={5 / zoom}
+                        fill={i === 0 ? '#C17644' : '#4A7A3A'} stroke="#FDF6E9" strokeWidth={2 / zoom} />
+                      {i === 0 && pts.length >= 3 && (
+                        <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={12 / zoom}
+                          fill="none" stroke="#C17644" strokeWidth={1 / zoom} strokeDasharray="3 2" opacity={0.5} />
+                      )}
+                    </g>
+                  ))}
+                  {/* Instruction text */}
+                  {drawingCursor && (
+                    <text x={drawingCursor.x * SCALE + 12 / zoom} y={drawingCursor.y * SCALE - 8 / zoom}
+                      fontSize={9 / zoom} fontFamily="Outfit" fill="#4A6A2A" opacity={0.7}>
+                      {pts.length < 3 ? `Click to add point (${pts.length}/3 min)` : 'Click first point to close'}
+                    </text>
+                  )}
+                </g>
+              );
+            })()}
 
             {/* Element placement preview */}
             {placingElement && elementPreviewPos && (() => {
