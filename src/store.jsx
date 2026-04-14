@@ -881,6 +881,21 @@ function reducer(state, action) {
     case 'UPDATE_HOUSE_POLYGON': {
       return { ...state, housePolygon: action.payload };
     }
+    case 'UPDATE_YARD_POLYGON': {
+      const poly = action.payload;
+      // Also update yard dimensions from bounding box
+      const xs = poly.map(p => p.x), ys = poly.map(p => p.y);
+      const w = Math.max(20, Math.round(Math.max(...xs) - Math.min(...xs)));
+      const h = Math.max(20, Math.round(Math.max(...ys) - Math.min(...ys)));
+      return { ...state, yardPolygon: poly, yardWidthFt: w, yardHeightFt: h };
+    }
+    case 'ADD_YARD_VERTEX': {
+      const { index, point } = action.payload;
+      if (!state.yardPolygon) return state;
+      const newPoly = [...state.yardPolygon];
+      newPoly.splice(index, 0, point);
+      return { ...state, yardPolygon: newPoly };
+    }
     case 'SET_YARD_GEO': {
       return { ...state, yardGeoVertices: action.payload };
     }

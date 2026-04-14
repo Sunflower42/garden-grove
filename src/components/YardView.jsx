@@ -104,11 +104,14 @@ export default function YardView({ isMobile }) {
   const [houseFeatureMenu, setHouseFeatureMenu] = useState(null); // { edgeIndex, t, screenX, screenY }
   const [selectedHouseFeature, setSelectedHouseFeature] = useState(null); // feature id
   const [draggingHouseFeature, setDraggingHouseFeature] = useState(null); // feat id being dragged along wall
-  const [editingHouse, setEditingHouse] = useState(state.editYardMode || false); // toggle house polygon vertex editing
+  const [editingHouse, setEditingHouse] = useState(false); // toggle house polygon vertex editing
+  const [editingYardOutline, setEditingYardOutline] = useState(false); // toggle yard polygon vertex editing
+  const [draggingYardVertex, setDraggingYardVertex] = useState(null); // vertex index for yard polygon
   // Auto-enable yard editing mode from settings
   useEffect(() => {
     if (state.editYardMode) {
       setEditingHouse(true);
+      setEditingYardOutline(true);
       // Auto-show satellite overlay if available
       if (state.satelliteUrl || state.yardGeoVertices) {
         setShowSatellite(true);
@@ -225,7 +228,7 @@ export default function YardView({ isMobile }) {
   // --- Mouse Handlers ---
 
   const handleMouseDown = useCallback((e) => {
-    if (draggingVertex || draggingHouseVertex || draggingElementVertex || draggingSmoothVertex || movingPlot || draggingYardElement || elementPending || resizingYardElement || rotatingYardElement) return;
+    if (draggingVertex || draggingHouseVertex || draggingYardVertex || draggingElementVertex || draggingSmoothVertex || movingPlot || draggingYardElement || elementPending || resizingYardElement || rotatingYardElement) return;
 
     // House polygon vertex editing
     if (editingHouse && state.housePolygon && zoom !== null && panOffset) {
@@ -262,6 +265,45 @@ export default function YardView({ isMobile }) {
           const newPt = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
           dispatch({ type: 'ADD_HOUSE_VERTEX', payload: { index: j, point: newPt } });
           setDraggingHouseVertex(j);
+          return;
+        }
+      }
+    }
+    // Yard polygon vertex editing
+    if (editingYardOutline && state.yardPolygon && zoom !== null && panOffset) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const toScreen = (pt) => ({
+        x: pt.x * SCALE * zoom + panOffset.x,
+        y: pt.y * SCALE * zoom + panOffset.y,
+      });
+
+      // Check vertices
+      for (let i = 0; i < state.yardPolygon.length; i++) {
+        const sp = toScreen(state.yardPolygon[i]);
+        const dist = Math.sqrt((mx - sp.x) ** 2 + (my - sp.y) ** 2);
+        if (dist < VERTEX_GRAB_R) {
+          e.preventDefault();
+          e.stopPropagation();
+          setDraggingYardVertex(i);
+          return;
+        }
+      }
+
+      // Check edges to add a vertex
+      for (let i = 0; i < state.yardPolygon.length; i++) {
+        const j = (i + 1) % state.yardPolygon.length;
+        const sa = toScreen(state.yardPolygon[i]);
+        const sb = toScreen(state.yardPolygon[j]);
+        const { t, dist } = closestOnSegment(mx, my, sa.x, sa.y, sb.x, sb.y);
+        if (dist < EDGE_GRAB_D && t > 0.15 && t < 0.85) {
+          e.preventDefault();
+          e.stopPropagation();
+          const svg = toSVG(e.clientX, e.clientY);
+          const newPt = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
+          dispatch({ type: 'ADD_YARD_VERTEX', payload: { index: j, point: newPt } });
+          setDraggingYardVertex(j);
           return;
         }
       }
@@ -380,6 +422,14 @@ export default function YardView({ isMobile }) {
       const newPoly = [...state.housePolygon];
       newPoly[draggingHouseVertex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
       dispatch({ type: 'UPDATE_HOUSE_POLYGON', payload: newPoly });
+      return;
+    }
+    // Yard polygon vertex dragging
+    if (draggingYardVertex !== null && state.yardPolygon) {
+      const svg = toSVG(e.clientX, e.clientY);
+      const newPoly = [...state.yardPolygon];
+      newPoly[draggingYardVertex] = { x: Math.round(toFt(svg.x) * 2) / 2, y: Math.round(toFt(svg.y) * 2) / 2 };
+      dispatch({ type: 'UPDATE_YARD_POLYGON', payload: newPoly });
       return;
     }
     // Element polygon vertex dragging
@@ -572,7 +622,7 @@ export default function YardView({ isMobile }) {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingSmoothVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, elementPending, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, panOffset, drawingBed, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingYardVertex, draggingElementVertex, draggingSmoothVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, elementPending, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardPolygon, state.yardElements, zoom, panOffset, drawingBed, dispatch]);
 
   // Rotate a group of plots clockwise around their collective center
   const handleRotatePlots = useCallback((plotIds, degrees = 45) => {
@@ -600,6 +650,7 @@ export default function YardView({ isMobile }) {
   const handleMouseUp = useCallback((e) => {
     setIsPanning(false);
     if (draggingHouseVertex !== null) { setDraggingHouseVertex(null); return; }
+    if (draggingYardVertex !== null) { setDraggingYardVertex(null); return; }
     if (draggingHouseFeature) { setDraggingHouseFeature(null); return; }
     if (draggingElementVertex) { setDraggingElementVertex(null); return; }
     if (draggingSmoothVertex) { setDraggingSmoothVertex(null); return; }
@@ -648,7 +699,7 @@ export default function YardView({ isMobile }) {
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingSmoothVertex, draggingVertex, rotatingPlot, elementPending, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
+  }, [draggingHouseVertex, draggingYardVertex, draggingHouseFeature, draggingElementVertex, draggingSmoothVertex, draggingVertex, rotatingPlot, elementPending, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -1303,17 +1354,26 @@ export default function YardView({ isMobile }) {
             </AnimatePresence>
           </div>
 
-          {/* Edit House */}
-          {state.housePolygon && (
+          {/* Edit Yard & House */}
+          {(state.housePolygon || state.yardPolygon) && (
             <button
-              onClick={() => { setEditingHouse(!editingHouse); setHouseFeatureMenu(null); setSelectedHouseFeature(null); }}
+              onClick={() => {
+                const newEditing = !editingHouse;
+                setEditingHouse(newEditing);
+                setEditingYardOutline(newEditing);
+                setHouseFeatureMenu(null);
+                setSelectedHouseFeature(null);
+                if (newEditing && (state.satelliteUrl || state.yardGeoVertices)) {
+                  setShowSatellite(true);
+                }
+              }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
                 editingHouse
                   ? 'bg-terra text-cream'
                   : 'bg-sage/10 text-sage-dark dark:text-sage hover:bg-sage/15 border border-sage/15 dark:border-sage-dark/20'
               }`}
             >
-              <Home className="w-3.5 h-3.5" /> {editingHouse ? 'Done Editing' : 'Edit House'}
+              <Home className="w-3.5 h-3.5" /> {editingHouse ? 'Done Editing' : 'Edit Yard & House'}
             </button>
           )}
 
@@ -1964,9 +2024,28 @@ export default function YardView({ isMobile }) {
                 )}
                 <polygon
                   points={state.yardPolygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ')}
-                  fill="none" stroke={showSatellite ? "#fff" : "#5A8A3A"} strokeWidth={1.5} strokeLinejoin="round"
-                  opacity={showSatellite ? 0.4 : 1}
+                  fill="none" stroke={editingYardOutline ? "#C17644" : showSatellite ? "#fff" : "#5A8A3A"}
+                  strokeWidth={editingYardOutline ? 2 / zoom : 1.5} strokeLinejoin="round"
+                  strokeDasharray={editingYardOutline ? `${6 / zoom} ${3 / zoom}` : 'none'}
+                  opacity={editingYardOutline ? 0.9 : showSatellite ? 0.4 : 1}
                 />
+                {/* Yard vertex handles — when editing */}
+                {editingYardOutline && state.yardPolygon.map((p, i) => (
+                  <g key={`yv-${i}`}>
+                    <circle
+                      cx={p.x * SCALE} cy={p.y * SCALE}
+                      r={12 / zoom}
+                      fill="transparent"
+                      style={{ cursor: draggingYardVertex === i ? 'grabbing' : 'grab', pointerEvents: 'all' }}
+                    />
+                    <circle
+                      cx={p.x * SCALE} cy={p.y * SCALE}
+                      r={6 / zoom}
+                      fill="#5A8A3A" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  </g>
+                ))}
               </>
             ) : (
               <>
@@ -1981,8 +2060,15 @@ export default function YardView({ isMobile }) {
               const geoVerts = state.yardGeoVertices;
               const lats = geoVerts.map(v => v[0]);
               const lngs = geoVerts.map(v => v[1]);
-              const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-              const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+              // When editing yard outlines, extend the satellite view by 50% in each direction
+              const isEditing = editingYardOutline || editingHouse;
+              const padFrac = isEditing ? 0.5 : 0;
+              const latRange = Math.max(...lats) - Math.min(...lats);
+              const lngRange = Math.max(...lngs) - Math.min(...lngs);
+              const minLat = Math.min(...lats) - latRange * padFrac;
+              const maxLat = Math.max(...lats) + latRange * padFrac;
+              const minLng = Math.min(...lngs) - lngRange * padFrac;
+              const maxLng = Math.max(...lngs) + lngRange * padFrac;
 
               // verticesToFeet maps geo bbox to feet using:
               //   x = (lng - minLng) / lngPerFt
@@ -1992,6 +2078,11 @@ export default function YardView({ isMobile }) {
               const cLat = (minLat + maxLat) / 2;
               const latPerFt = 1 / 364000;
               const lngPerFt = 1 / (364000 * Math.cos(cLat * Math.PI / 180));
+              // When editing, offset the satellite so the original yard bbox stays at 0,0
+              const origMinLng = Math.min(...geoVerts.map(v => v[1]));
+              const origMaxLat = Math.max(...geoVerts.map(v => v[0]));
+              const offsetXFt = isEditing ? (origMinLng - minLng) / lngPerFt : 0;
+              const offsetYFt = isEditing ? (maxLat - origMaxLat) / latPerFt : 0;
               const geoBboxWFt = (maxLng - minLng) / lngPerFt;
               const geoBboxHFt = (maxLat - minLat) / latPerFt;
               const geoBboxWSvg = geoBboxWFt * SCALE;
@@ -2050,7 +2141,8 @@ export default function YardView({ isMobile }) {
               }
 
               return (
-                <g opacity={0.9} clipPath={state.yardPolygon ? "url(#yard-clip)" : undefined}>
+                <g opacity={0.9} clipPath={state.yardPolygon && !isEditing ? "url(#yard-clip)" : undefined}
+                  transform={isEditing ? `translate(${-offsetXFt * SCALE},${-offsetYFt * SCALE})` : undefined}>
                   {tiles}
                 </g>
               );
