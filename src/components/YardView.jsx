@@ -1643,7 +1643,7 @@ export default function YardView({ isMobile }) {
             );
           })()}
 
-          {/* Scale quadrant group */}
+          {/* Resize quadrant group — direct foot inputs */}
           {(() => {
             const groupId = editingPlot?.quadrantGroupId
               || (() => {
@@ -1652,23 +1652,44 @@ export default function YardView({ isMobile }) {
                 return first?.quadrantGroupId || null;
               })();
             if (!groupId) return null;
+            const groupPlots = state.plots.filter(p => p.quadrantGroupId === groupId);
+            const bedW = groupPlots[0]?.widthFt || 8;
+            const bedH = groupPlots[0]?.heightFt || 8;
             return (
-              <div className="flex items-center gap-1 ml-1">
-                <button
-                  onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId, scale: 0.9 } })}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
-                  title="Shrink quadrant group 10%"
-                >
-                  −
-                </button>
-                <span className="text-[10px] text-sage-dark/60">Size</span>
-                <button
-                  onClick={() => dispatch({ type: 'SCALE_QUADRANT_GROUP', payload: { groupId, scale: 1.1 } })}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-sage/8 text-sage-dark hover:bg-sage/15 transition-all border border-sage/15"
-                  title="Grow quadrant group 10%"
-                >
-                  +
-                </button>
+              <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20 ml-1" style={{ padding: '3px 10px' }}>
+                <span className="text-[10px] text-sage-dark/60 dark:text-sage/60 font-medium">Bed</span>
+                <input
+                  type="text"
+                  defaultValue={bedW}
+                  key={`qw-${groupId}-${bedW}`}
+                  className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                  style={{ padding: '3px 4px' }}
+                  title="Bed width in feet"
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
+                    if (val && val >= 2 && val <= 30 && val !== bedW) {
+                      dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW: val, bedH } });
+                    }
+                  }}
+                />
+                <span className="text-xs text-sage-dark/40 dark:text-sage/40">×</span>
+                <input
+                  type="text"
+                  defaultValue={bedH}
+                  key={`qh-${groupId}-${bedH}`}
+                  className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                  style={{ padding: '3px 4px' }}
+                  title="Bed height in feet"
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
+                    if (val && val >= 2 && val <= 30 && val !== bedH) {
+                      dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW, bedH: val } });
+                    }
+                  }}
+                />
+                <span className="text-[10px] text-sage-dark/40 dark:text-sage/40">ft</span>
               </div>
             );
           })()}

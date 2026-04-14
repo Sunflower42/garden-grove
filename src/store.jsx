@@ -373,6 +373,57 @@ function reducer(state, action) {
         }),
       };
     }
+    case 'RESIZE_QUADRANT_GROUP': {
+      const { groupId, bedW, bedH } = action.payload;
+      const groupPlots = state.plots.filter(p => p.quadrantGroupId === groupId);
+      if (groupPlots.length !== 4) return state;
+      // Find center of the group
+      const allPts = groupPlots.flatMap(p => p.shape || []);
+      const cx = allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length;
+      const cy = allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length;
+      // Rebuild 4 beds around center with gap=4
+      const gap = 4;
+      const halfW = (bedW * 2 + gap) / 2;
+      const halfH = (bedH * 2 + gap) / 2;
+      const startX = cx - halfW;
+      const startY = cy - halfH;
+      const offsets = [
+        { dx: 0, dy: 0 },
+        { dx: bedW + gap, dy: 0 },
+        { dx: 0, dy: bedH + gap },
+        { dx: bedW + gap, dy: bedH + gap },
+      ];
+      // Sort group plots by original position (NW, NE, SW, SE)
+      const sorted = [...groupPlots].sort((a, b) => {
+        const ay = a.yardY ?? 0, by_ = b.yardY ?? 0;
+        const ax = a.yardX ?? 0, bx = b.yardX ?? 0;
+        return ay !== by_ ? ay - by_ : ax - bx;
+      });
+      return {
+        ...state,
+        plots: state.plots.map(p => {
+          if (p.quadrantGroupId !== groupId) return p;
+          const idx = sorted.indexOf(p);
+          if (idx < 0) return p;
+          const o = offsets[idx];
+          const px = Math.round(startX + o.dx);
+          const py = Math.round(startY + o.dy);
+          return {
+            ...p,
+            widthFt: bedW,
+            heightFt: bedH,
+            yardX: px,
+            yardY: py,
+            shape: [
+              { x: px, y: py },
+              { x: px + bedW, y: py },
+              { x: px + bedW, y: py + bedH },
+              { x: px, y: py + bedH },
+            ],
+          };
+        }),
+      };
+    }
     case 'UPDATE_PLOT_NAME': {
       const { id, name } = action.payload;
       return {
