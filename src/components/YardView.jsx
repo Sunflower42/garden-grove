@@ -126,6 +126,9 @@ export default function YardView({ isMobile }) {
   // Smooth bed vertex editing
   const [draggingSmoothVertex, setDraggingSmoothVertex] = useState(null); // { id, vertexIndex }
 
+  // Element renaming
+  const [renamingElement, setRenamingElement] = useState(null); // yard element id being renamed
+
   // Copy/paste clipboard
   const [clipboardElement, setClipboardElement] = useState(null); // copied yard element data
   const [copyFeedback, setCopyFeedback] = useState(null); // 'copied' | 'pasted' for brief toast
@@ -1391,6 +1394,37 @@ export default function YardView({ isMobile }) {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Element name — editable for trees, bushes, etc. */}
+          {(() => {
+            if (!selectedYardElement) return null;
+            const el = state.yardElements.find(y => y.id === selectedYardElement);
+            if (!el) return null;
+            const elemData = getElementById(el.elementId);
+            if (!elemData) return null;
+            return (
+              <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20" style={{ padding: '3px 10px' }}>
+                <input
+                  type="text"
+                  defaultValue={el.customName || elemData.name}
+                  key={`name-${el.id}-${el.customName || elemData.name}`}
+                  className="w-28 text-xs bg-transparent text-sage-dark dark:text-sage focus:outline-none focus:bg-white/60 dark:focus:bg-black/20 rounded-md border border-transparent focus:border-sage/20 dark:focus:border-sage-dark/30 transition-all"
+                  style={{ padding: '3px 6px' }}
+                  title="Element name — click to edit"
+                  placeholder={elemData.name}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (name && name !== elemData.name) {
+                      dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, customName: name } });
+                    } else if (!name || name === elemData.name) {
+                      dispatch({ type: 'UPDATE_YARD_ELEMENT', payload: { id: el.id, customName: undefined } });
+                    }
+                  }}
+                />
+              </div>
+            );
+          })()}
 
           {/* Edit Shape — for polygon-editable yard elements */}
           {(() => {
@@ -2946,6 +2980,7 @@ export default function YardView({ isMobile }) {
                     width={ew} height={eh}
                     cellSize={SCALE}
                     isSelected={isSelected}
+                    customName={el.customName}
                   />
                   {/* Multi-selection highlight */}
                   {multiSelectedElements.has(el.id) && !isSelected && (

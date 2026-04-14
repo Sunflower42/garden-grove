@@ -9,7 +9,7 @@ function seededRandom(seed) {
   };
 }
 
-export function ElementSVG({ element, x, y, width, height, cellSize, isSelected, polygon }) {
+export function ElementSVG({ element, x, y, width, height, cellSize, isSelected, polygon, customName }) {
   const px = x;
   const py = y;
   const w = width;
@@ -59,7 +59,30 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
       )}
 
       {/* Element shape */}
-      {element.id.startsWith('tree-') ? (
+      {element.id === 'bush' ? (
+        // Bush — dense rounded mound, smaller than trees
+        <g>
+          {/* Shadow */}
+          <ellipse cx={px + w / 2 + 1} cy={py + h / 2 + 1} rx={w / 2} ry={h / 2}
+            fill="#000" opacity={0.06} />
+          {/* Base shape */}
+          <ellipse cx={px + w / 2} cy={py + h / 2} rx={w / 2} ry={h / 2}
+            fill="#3A7A2A" stroke="#2A6A1A" strokeWidth={1} opacity={0.85} />
+          {/* Highlight mounds */}
+          {Array.from({ length: Math.max(4, Math.floor(w * h / 80)) }).map((_, i) => {
+            const angle = (i * 2.39996);
+            const dist = (0.15 + (i % 4) * 0.1) * w / 2;
+            const cx = px + w / 2 + Math.cos(angle) * dist;
+            const cy = py + h / 2 + Math.sin(angle) * dist;
+            const r = w * 0.08 + (i % 3) * w * 0.03;
+            const shade = i % 3 === 0 ? '#4A8A3A' : i % 3 === 1 ? '#5A9A4A' : '#2A6A1A';
+            return <circle key={i} cx={cx} cy={cy} r={r} fill={shade} opacity={0.5} />;
+          })}
+          {/* Top highlight */}
+          <ellipse cx={px + w * 0.45} cy={py + h * 0.4} rx={w * 0.15} ry={h * 0.1}
+            fill="#6AAA5A" opacity={0.3} />
+        </g>
+      ) : element.id.startsWith('tree-') ? (
         // Tree canopy — layered circles for natural look
         <g>
           {/* Shadow on ground */}
@@ -1029,7 +1052,7 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
         fill="#5C4033"
         opacity={0.7}
       >
-        {element.name}
+        {customName || element.name}
       </text>
     </g>
   );

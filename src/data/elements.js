@@ -324,6 +324,19 @@ export const ELEMENTS = [
     circular: true,
   },
 
+  {
+    id: 'bush',
+    name: 'Bush',
+    category: 'decor',
+    widthIn: 48,
+    heightIn: 48,
+    color: '#3A7A2A',
+    borderColor: '#2A6A1A',
+    description: 'Ornamental shrub — boxwood, hydrangea, azalea',
+    circular: true,
+    resizable: true,
+  },
+
   // Curved paths & beds
   {
     id: 'curved-path',
