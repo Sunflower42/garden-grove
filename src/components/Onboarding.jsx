@@ -312,6 +312,23 @@ export default function Onboarding() {
       <BotanicalBg />
 
       <div className="relative z-10 w-full min-h-full flex flex-col items-center justify-center px-6 py-16">
+        {/* Return to garden — shown when user already has data */}
+        {appState.plots && appState.plots.length > 0 && (
+          <motion.div
+            className="absolute top-6 right-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            <button
+              onClick={() => dispatch({ type: 'SET_SETUP', payload: {} })}
+              className="px-4 py-2 rounded-xl text-xs font-medium bg-cream/15 text-cream hover:bg-cream/25 border border-cream/20 transition-all flex items-center gap-2 backdrop-blur-sm"
+            >
+              ← Return to My Garden
+            </button>
+          </motion.div>
+        )}
+
         {/* Logo */}
         <motion.div
           className="text-center mb-12"
