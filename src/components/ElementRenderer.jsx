@@ -221,7 +221,7 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
             return shrubs;
           })()}
         </g>
-      ) : element.id === 'curved-bed' ? (
+      ) : element.id === 'curved-bed' || element.id === 'planting-bed-rect' ? (
         // Curved planting bed — green with mulch texture
         <g>
           <rect x={px} y={py} width={w} height={h} fill="#4A6A2A" stroke="#3A5A1A" strokeWidth={1.5} rx={3} opacity={0.8} />
