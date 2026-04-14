@@ -814,9 +814,10 @@ function PlotEditor({ isMobile }) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   @page { size: landscape; margin: 0.5in; }
-  body { display: flex; flex-direction: column; align-items: center; height: 100vh; background: white; }
-  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18px; color: #3A5A2A; margin: 12px 0 8px; }
-  .container { flex: 1; width: 100%; }
+  html, body { height: 100%; overflow: hidden; background: white; }
+  body { display: flex; flex-direction: column; align-items: center; }
+  h1 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18px; color: #3A5A2A; margin: 12px 0 8px; flex-shrink: 0; }
+  .container { flex: 1; width: 100%; min-height: 0; }
   svg { width: 100%; height: 100%; }
 </style></head>
 <body><h1>${title}</h1><div class="container">${svgStr}</div>

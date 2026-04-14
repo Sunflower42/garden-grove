@@ -1258,9 +1258,10 @@ export default function YardView({ isMobile }) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   @page { size: landscape; margin: 0.5in; }
-  body { display: flex; align-items: center; justify-content: center; height: 100vh; background: white; }
-  .container { width: 100%; height: 100%; }
-  svg { width: 100%; height: 100%; }
+  html, body { height: 100%; overflow: hidden; background: white; }
+  body { display: flex; align-items: center; justify-content: center; }
+  .container { width: 100%; max-height: 100%; }
+  svg { width: 100%; max-height: 100%; }
 </style></head>
 <body><div class="container">${svgStr}</div>
 <script>window.onload = function() { window.print(); }<\/script>
