@@ -2633,11 +2633,18 @@ export default function YardView({ isMobile }) {
                     setDraggingYardElement({ id: el.id, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                   }}
                 >
-                  {/* Larger invisible hit area */}
-                  <rect
-                    x={ex - 4} y={ey - 4} width={ew + 8} height={eh + 8}
-                    fill="transparent"
-                  />
+                  {/* Larger invisible hit area — extra padding for narrow elements */}
+                  {(() => {
+                    const minHit = 16 / (zoom || 1); // minimum clickable size in SVG units
+                    const padX = Math.max(6, (minHit - ew) / 2);
+                    const padY = Math.max(6, (minHit - eh) / 2);
+                    return (
+                      <rect
+                        x={ex - padX} y={ey - padY} width={ew + padX * 2} height={eh + padY * 2}
+                        fill="transparent"
+                      />
+                    );
+                  })()}
                   <ElementSVG
                     element={elemData}
                     x={ex} y={ey}
