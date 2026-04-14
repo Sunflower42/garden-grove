@@ -112,6 +112,13 @@ export default function YardView({ isMobile }) {
     if (state.editYardMode) {
       setEditingHouse(true);
       setEditingYardOutline(true);
+      // Auto-create yard polygon from rectangle if not set
+      if (!state.yardPolygon) {
+        const w = state.yardWidthFt, h = state.yardHeightFt;
+        dispatch({ type: 'UPDATE_YARD_POLYGON', payload: [
+          { x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }
+        ]});
+      }
       // Auto-show satellite overlay if available
       if (state.satelliteUrl || state.yardGeoVertices) {
         setShowSatellite(true);
@@ -1363,8 +1370,17 @@ export default function YardView({ isMobile }) {
                 setEditingYardOutline(newEditing);
                 setHouseFeatureMenu(null);
                 setSelectedHouseFeature(null);
-                if (newEditing && (state.satelliteUrl || state.yardGeoVertices)) {
-                  setShowSatellite(true);
+                if (newEditing) {
+                  // Auto-create yard polygon from rectangle if not set
+                  if (!state.yardPolygon) {
+                    const w = state.yardWidthFt, h = state.yardHeightFt;
+                    dispatch({ type: 'UPDATE_YARD_POLYGON', payload: [
+                      { x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }
+                    ]});
+                  }
+                  if (state.satelliteUrl || state.yardGeoVertices) {
+                    setShowSatellite(true);
+                  }
                 }
               }}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-sm flex items-center gap-1.5 ${
@@ -2051,6 +2067,11 @@ export default function YardView({ isMobile }) {
               <>
                 {!showSatellite && (
                   <rect x={0} y={0} width={svgW} height={svgH} fill="url(#grass)" rx={4} stroke="#5A8A3A" strokeWidth={1} opacity={0.95} />
+                )}
+                {/* Show rectangle outline when editing (before polygon is created) */}
+                {editingYardOutline && (
+                  <rect x={0} y={0} width={svgW} height={svgH}
+                    fill="none" stroke="#C17644" strokeWidth={2 / zoom} strokeDasharray={`${6 / zoom} ${3 / zoom}`} rx={2} />
                 )}
               </>
             )}
