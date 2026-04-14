@@ -1249,6 +1249,8 @@ export default function YardView({ isMobile }) {
     // Remove the pan/zoom transform — viewBox handles the framing now
     const innerG = clone.querySelector('g[transform]');
     if (innerG) innerG.setAttribute('transform', 'scale(1)');
+    // Remove satellite tile foreignObjects — external images cause print to spool forever
+    clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
     const svgStr = new XMLSerializer().serializeToString(clone);
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
     printWindow.document.write(`<!DOCTYPE html>

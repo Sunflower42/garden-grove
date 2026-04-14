@@ -804,6 +804,8 @@ function PlotEditor({ isMobile }) {
     // Remove the pan/zoom transform — viewBox handles the framing now
     const innerG = clone.querySelector('g[transform]');
     if (innerG) innerG.setAttribute('transform', 'scale(1)');
+    // Remove any foreignObject elements that could stall the printer
+    clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
     const title = isQuadrantView ? 'Quadrant Garden' : activePlot?.name || 'Garden Plot';
     const svgStr = new XMLSerializer().serializeToString(clone);
     const printWindow = window.open('', '_blank', 'width=1000,height=800');
