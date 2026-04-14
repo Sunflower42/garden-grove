@@ -128,6 +128,8 @@ export default function YardView({ isMobile }) {
 
   // Element renaming
   const [renamingElement, setRenamingElement] = useState(null); // yard element id being renamed
+  // Track if an element was just selected (to prevent canvas onClick from immediately deselecting)
+  const justSelectedRef = useRef(false);
 
   // Copy/paste clipboard
   const [clipboardElement, setClipboardElement] = useState(null); // copied yard element data
@@ -1909,6 +1911,11 @@ export default function YardView({ isMobile }) {
             return;
           }
           if (!draggingVertex && !draggingElementVertex && !movingPlot && !draggingYardElement && !elementPending) {
+            // Skip deselection if an element was just selected via mouseDown
+            if (justSelectedRef.current) {
+              justSelectedRef.current = false;
+              return;
+            }
             dispatch({ type: 'SET_EDITING_PLOT', payload: null });
             setSelectedYardElement(null);
             setEditingElementShape(null);
@@ -2589,6 +2596,7 @@ export default function YardView({ isMobile }) {
                       e.stopPropagation();
                       e.preventDefault();
                       setSelectedYardElement(el.id);
+                      justSelectedRef.current = true;
                       const svg = toSVG(e.clientX, e.clientY);
                       setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                     }}
@@ -2738,6 +2746,7 @@ export default function YardView({ isMobile }) {
                       e.stopPropagation();
                       e.preventDefault();
                       setSelectedYardElement(el.id);
+                      justSelectedRef.current = true;
                       const svg = toSVG(e.clientX, e.clientY);
                       setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                     }}
@@ -2959,6 +2968,7 @@ export default function YardView({ isMobile }) {
                       }
                     }
                     // Don't start drag immediately — wait for threshold
+                    justSelectedRef.current = true;
                     setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                   }}
                 >
