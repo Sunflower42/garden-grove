@@ -1655,42 +1655,67 @@ export default function YardView({ isMobile }) {
             const groupPlots = state.plots.filter(p => p.quadrantGroupId === groupId);
             const bedW = groupPlots[0]?.widthFt || 8;
             const bedH = groupPlots[0]?.heightFt || 8;
+            // Detect current gap from positions
+            const sortedQ = [...groupPlots].sort((a, b) => (a.yardY ?? 0) - (b.yardY ?? 0) || (a.yardX ?? 0) - (b.yardX ?? 0));
+            const currentGapFt = sortedQ.length >= 2 ? Math.round((Math.abs((sortedQ[1].yardX ?? 0) - (sortedQ[0].yardX ?? 0)) - bedW) * 100) / 100 : 4;
+            const currentGapIn = Math.round(currentGapFt * 12);
             return (
-              <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20 ml-1" style={{ padding: '3px 10px' }}>
-                <span className="text-[10px] text-sage-dark/60 dark:text-sage/60 font-medium">Bed</span>
-                <input
-                  type="text"
-                  defaultValue={bedW}
-                  key={`qw-${groupId}-${bedW}`}
-                  className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
-                  style={{ padding: '3px 4px' }}
-                  title="Bed width in feet"
-                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                  onBlur={(e) => {
-                    const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
-                    if (val && val >= 2 && val <= 30 && val !== bedW) {
-                      dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW: val, bedH } });
-                    }
-                  }}
-                />
-                <span className="text-xs text-sage-dark/40 dark:text-sage/40">×</span>
-                <input
-                  type="text"
-                  defaultValue={bedH}
-                  key={`qh-${groupId}-${bedH}`}
-                  className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
-                  style={{ padding: '3px 4px' }}
-                  title="Bed height in feet"
-                  onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                  onBlur={(e) => {
-                    const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
-                    if (val && val >= 2 && val <= 30 && val !== bedH) {
-                      dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW, bedH: val } });
-                    }
-                  }}
-                />
-                <span className="text-[10px] text-sage-dark/40 dark:text-sage/40">ft</span>
-              </div>
+              <>
+                <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20 ml-1" style={{ padding: '3px 10px' }}>
+                  <span className="text-[10px] text-sage-dark/60 dark:text-sage/60 font-medium">Bed</span>
+                  <input
+                    type="text"
+                    defaultValue={bedW}
+                    key={`qw-${groupId}-${bedW}`}
+                    className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                    style={{ padding: '3px 4px' }}
+                    title="Bed width in feet"
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
+                      if (val && val >= 2 && val <= 30 && val !== bedW) {
+                        dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW: val, bedH, gapFt: currentGapFt } });
+                      }
+                    }}
+                  />
+                  <span className="text-xs text-sage-dark/40 dark:text-sage/40">×</span>
+                  <input
+                    type="text"
+                    defaultValue={bedH}
+                    key={`qh-${groupId}-${bedH}`}
+                    className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                    style={{ padding: '3px 4px' }}
+                    title="Bed height in feet"
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
+                      if (val && val >= 2 && val <= 30 && val !== bedH) {
+                        dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW, bedH: val, gapFt: currentGapFt } });
+                      }
+                    }}
+                  />
+                  <span className="text-[10px] text-sage-dark/40 dark:text-sage/40">ft</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-sage/5 dark:bg-sage/8 rounded-xl border border-sage/15 dark:border-sage-dark/20" style={{ padding: '3px 10px' }}>
+                  <span className="text-[10px] text-sage-dark/60 dark:text-sage/60 font-medium">Path</span>
+                  <input
+                    type="text"
+                    defaultValue={currentGapIn}
+                    key={`qg-${groupId}-${currentGapIn}`}
+                    className="w-10 text-xs text-center bg-white/60 dark:bg-black/20 rounded-md border border-sage/20 dark:border-sage-dark/30 text-sage-dark dark:text-sage"
+                    style={{ padding: '3px 4px' }}
+                    title="Path width in inches"
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value.trim().replace(/[^0-9]/g, ''));
+                      if (val && val >= 12 && val !== currentGapIn) {
+                        dispatch({ type: 'RESIZE_QUADRANT_GROUP', payload: { groupId, bedW, bedH, gapFt: Math.round(val / 12 * 100) / 100 } });
+                      }
+                    }}
+                  />
+                  <span className="text-[10px] text-sage-dark/40 dark:text-sage/40">in</span>
+                </div>
+              </>
             );
           })()}
 

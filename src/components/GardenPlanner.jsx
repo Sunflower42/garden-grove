@@ -109,7 +109,9 @@ function PlotEditor({ isMobile }) {
     });
     const bedW = sorted[0].widthFt;
     const bedH = sorted[0].heightFt;
-    const gap = 4; // feet between beds (center walking path)
+    // Auto-detect gap from actual positions
+    const detectedGap = sorted.length >= 2 ? Math.abs((sorted[1].yardX ?? 0) - (sorted[0].yardX ?? 0)) - bedW : 4;
+    const gap = detectedGap > 0 ? Math.round(detectedGap * 100) / 100 : 4;
     const positions = [
       { dx: 0, dy: 0 },                    // NW
       { dx: bedW + gap, dy: 0 },            // NE
@@ -155,10 +157,13 @@ function PlotEditor({ isMobile }) {
   // Also compute the rotation angle and transformed outline points.
   const { plotWidthFt, plotHeightFt, plotRotationDeg, plotOutlineLocal } = useMemo(() => {
     if (isQuadrantView && quadrantPlots && quadrantPlots.length === 4) {
-      // Clean 2x2 grid dimensions
+      // Clean 2x2 grid dimensions — detect gap from actual positions
       const bedW = quadrantPlots[0].widthFt;
       const bedH = quadrantPlots[0].heightFt;
-      const gap = 4;
+      const sorted = [...quadrantPlots].sort((a, b) => (a.yardY ?? 0) - (b.yardY ?? 0) || (a.yardX ?? 0) - (b.yardX ?? 0));
+      const gapX = sorted.length >= 2 ? Math.abs((sorted[1].yardX ?? 0) - (sorted[0].yardX ?? 0)) - bedW : 4;
+      const gapY = sorted.length >= 3 ? Math.abs((sorted[2].yardY ?? 0) - (sorted[0].yardY ?? 0)) - bedH : 4;
+      const gap = Math.max(gapX, gapY, 1);
       return { plotWidthFt: bedW * 2 + gap, plotHeightFt: bedH * 2 + gap, plotRotationDeg: 0, plotOutlineLocal: null };
     }
     if (!activePlot.shape || activePlot.shape.length < 3) {

@@ -374,15 +374,22 @@ function reducer(state, action) {
       };
     }
     case 'RESIZE_QUADRANT_GROUP': {
-      const { groupId, bedW, bedH } = action.payload;
+      const { groupId, bedW, bedH, gapFt } = action.payload;
       const groupPlots = state.plots.filter(p => p.quadrantGroupId === groupId);
       if (groupPlots.length !== 4) return state;
       // Find center of the group
       const allPts = groupPlots.flatMap(p => p.shape || []);
       const cx = allPts.reduce((s, pt) => s + pt.x, 0) / allPts.length;
       const cy = allPts.reduce((s, pt) => s + pt.y, 0) / allPts.length;
-      // Rebuild 4 beds around center with gap=4
-      const gap = 4;
+      // Use provided gap or detect from plot positions
+      let gap;
+      if (gapFt != null) {
+        gap = gapFt;
+      } else {
+        const sortedG = [...groupPlots].sort((a, b) => (a.yardY ?? 0) - (b.yardY ?? 0) || (a.yardX ?? 0) - (b.yardX ?? 0));
+        const detectedGap = sortedG.length >= 2 ? Math.abs((sortedG[1].yardX ?? 0) - (sortedG[0].yardX ?? 0)) - sortedG[0].widthFt : 4;
+        gap = detectedGap > 0 ? Math.round(detectedGap * 100) / 100 : 4;
+      }
       const halfW = (bedW * 2 + gap) / 2;
       const halfH = (bedH * 2 + gap) / 2;
       const startX = cx - halfW;
