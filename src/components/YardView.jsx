@@ -1473,7 +1473,7 @@ export default function YardView({ isMobile }) {
                 </div>
                 {isEditing && (
                   <span className="text-[10px] text-sage-dark/50 dark:text-sage/40">
-                    Drag points · Right-click to toggle sharp/smooth · Shift+right-click to delete
+                    Drag points · Click edge to add point · Right-click point to toggle corner · Shift+right-click to delete
                   </span>
                 )}
               </>
@@ -2516,20 +2516,41 @@ export default function YardView({ isMobile }) {
                     }}
                     onMouseDown={(e) => {
                       if (isEditingSmooth) {
-                        // Check if clicking near a vertex
-                        const svg = toSVG(e.clientX, e.clientY);
-                        const ftX = toFt(svg.x), ftY = toFt(svg.y);
+                        // Check if clicking near a vertex — use screen-space distance
+                        const rect = containerRef.current?.getBoundingClientRect();
+                        if (!rect) return;
+                        const mx = e.clientX - rect.left;
+                        const my = e.clientY - rect.top;
+                        const grabR = 18; // screen pixels
                         for (let i = 0; i < sp.points.length; i++) {
-                          const px = sp.points[i].x, py = sp.points[i].y;
-                          const dist = Math.sqrt((ftX - px) ** 2 + (ftY - py) ** 2);
-                          if (dist < 1.5 / (zoom || 1)) {
+                          const sx = sp.points[i].x * SCALE * zoom + panOffset.x;
+                          const sy = sp.points[i].y * SCALE * zoom + panOffset.y;
+                          const dist = Math.sqrt((mx - sx) ** 2 + (my - sy) ** 2);
+                          if (dist < grabR) {
                             e.stopPropagation();
                             e.preventDefault();
                             setDraggingSmoothVertex({ id: el.id, vertexIndex: i });
                             return;
                           }
                         }
-                        return; // don't drag whole element in edit mode
+                        // Clicking on the bed edge in edit mode — add a new point at closest edge
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const svg = toSVG(e.clientX, e.clientY);
+                        const ftX = toFt(svg.x), ftY = toFt(svg.y);
+                        const ftPoint = { x: Math.round(ftX * 2) / 2, y: Math.round(ftY * 2) / 2 };
+                        let bestIdx = 1, bestDist = Infinity;
+                        for (let i = 0; i < sp.points.length; i++) {
+                          const j = (i + 1) % sp.points.length;
+                          const edgeMx = (sp.points[i].x + sp.points[j].x) / 2;
+                          const edgeMy = (sp.points[i].y + sp.points[j].y) / 2;
+                          const d = Math.sqrt((ftX - edgeMx) ** 2 + (ftY - edgeMy) ** 2);
+                          if (d < bestDist) { bestDist = d; bestIdx = j; }
+                        }
+                        dispatch({ type: 'ADD_SMOOTH_PATH_POINT', payload: { id: el.id, index: bestIdx, point: ftPoint } });
+                        // Start dragging the new point immediately
+                        setDraggingSmoothVertex({ id: el.id, vertexIndex: bestIdx });
+                        return;
                       }
                       e.stopPropagation();
                       e.preventDefault();
@@ -2541,12 +2562,16 @@ export default function YardView({ isMobile }) {
                       if (isEditingSmooth) {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Right-click near a vertex to delete it or toggle mode
-                        const svg = toSVG(e.clientX, e.clientY);
-                        const ftX = toFt(svg.x), ftY = toFt(svg.y);
+                        // Right-click near a vertex to toggle sharp/smooth or delete
+                        const rect = containerRef.current?.getBoundingClientRect();
+                        if (!rect) return;
+                        const mx = e.clientX - rect.left;
+                        const my = e.clientY - rect.top;
                         for (let i = 0; i < sp.points.length; i++) {
-                          const dist = Math.sqrt((ftX - sp.points[i].x) ** 2 + (ftY - sp.points[i].y) ** 2);
-                          if (dist < 1.5 / (zoom || 1)) {
+                          const sx = sp.points[i].x * SCALE * zoom + panOffset.x;
+                          const sy = sp.points[i].y * SCALE * zoom + panOffset.y;
+                          const dist = Math.sqrt((mx - sx) ** 2 + (my - sy) ** 2);
+                          if (dist < 18) {
                             if (e.shiftKey) {
                               dispatch({ type: 'REMOVE_SMOOTH_PATH_POINT', payload: { id: el.id, index: i } });
                             } else {
@@ -2555,18 +2580,6 @@ export default function YardView({ isMobile }) {
                             return;
                           }
                         }
-                        // Right-click on edge to add point
-                        const ftPoint = { x: Math.round(ftX * 2) / 2, y: Math.round(ftY * 2) / 2 };
-                        // Find closest edge
-                        let bestIdx = 1, bestDist = Infinity;
-                        for (let i = 0; i < sp.points.length; i++) {
-                          const j = (i + 1) % sp.points.length;
-                          const mx = (sp.points[i].x + sp.points[j].x) / 2;
-                          const my = (sp.points[i].y + sp.points[j].y) / 2;
-                          const d = Math.sqrt((ftX - mx) ** 2 + (ftY - my) ** 2);
-                          if (d < bestDist) { bestDist = d; bestIdx = j; }
-                        }
-                        dispatch({ type: 'ADD_SMOOTH_PATH_POINT', payload: { id: el.id, index: bestIdx, point: ftPoint } });
                       }
                     }}
                   >
@@ -2606,20 +2619,26 @@ export default function YardView({ isMobile }) {
                       return (
                         <g key={`sv-${i}`}>
                           {/* Invisible grab target */}
-                          <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={12 / zoom}
+                          <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={16 / zoom}
                             fill="transparent" style={{ cursor: 'grab', pointerEvents: 'all' }} />
                           {/* Visible handle */}
                           {isSharp ? (
-                            <rect x={pt.x * SCALE - 5 / zoom} y={pt.y * SCALE - 5 / zoom}
-                              width={10 / zoom} height={10 / zoom}
+                            <rect x={pt.x * SCALE - 6 / zoom} y={pt.y * SCALE - 6 / zoom}
+                              width={12 / zoom} height={12 / zoom}
                               fill="#C17644" stroke="#FDF6E9" strokeWidth={2 / zoom}
                               transform={`rotate(45 ${pt.x * SCALE} ${pt.y * SCALE})`}
                               style={{ pointerEvents: 'none' }} />
                           ) : (
-                            <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={5 / zoom}
+                            <circle cx={pt.x * SCALE} cy={pt.y * SCALE} r={6 / zoom}
                               fill="#4A7A3A" stroke="#FDF6E9" strokeWidth={2 / zoom}
                               style={{ pointerEvents: 'none' }} />
                           )}
+                          {/* Point index label */}
+                          <text x={pt.x * SCALE} y={pt.y * SCALE - 10 / zoom}
+                            textAnchor="middle" fontSize={7 / zoom} fontFamily="Outfit"
+                            fill="#4A6A2A" opacity={0.6} style={{ pointerEvents: 'none' }}>
+                            {i + 1}
+                          </text>
                         </g>
                       );
                     })}
