@@ -93,6 +93,7 @@ export default function YardView({ isMobile }) {
   const [selectedYardElement, setSelectedYardElement] = useState(null); // element id
   const [multiSelectedPlots, setMultiSelectedPlots] = useState(new Set()); // Set of plot ids
   const [multiSelectedElements, setMultiSelectedElements] = useState(new Set()); // Set of yard element ids
+  const [elementPending, setElementPending] = useState(null); // { id, startX, startY, offsetX, offsetY } — waiting for drag threshold
   const [draggingYardElement, setDraggingYardElement] = useState(null); // { id, startX, startY, startElX, startElY }
   const [resizingYardElement, setResizingYardElement] = useState(null); // { id, handle, startX, startY, startW, startH }
   const [rotatingYardElement, setRotatingYardElement] = useState(null); // { id, startAngle, startRotation }
@@ -201,7 +202,7 @@ export default function YardView({ isMobile }) {
   // --- Mouse Handlers ---
 
   const handleMouseDown = useCallback((e) => {
-    if (draggingVertex || draggingHouseVertex || draggingElementVertex || movingPlot || draggingYardElement || resizingYardElement || rotatingYardElement) return;
+    if (draggingVertex || draggingHouseVertex || draggingElementVertex || movingPlot || draggingYardElement || elementPending || resizingYardElement || rotatingYardElement) return;
 
     // House polygon vertex editing
     if (editingHouse && state.housePolygon && zoom !== null && panOffset) {
@@ -477,6 +478,16 @@ export default function YardView({ isMobile }) {
       }
       return;
     }
+    // Check if pending element drag exceeds threshold
+    if (elementPending && !draggingYardElement) {
+      const dx = e.clientX - elementPending.startX;
+      const dy = e.clientY - elementPending.startY;
+      if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+        setDraggingYardElement({ id: elementPending.id, offsetX: elementPending.offsetX, offsetY: elementPending.offsetY });
+        setElementPending(null);
+      }
+      return;
+    }
     // Check if pending plot drag exceeds threshold
     if (plotPending && !movingPlot) {
       const dx = e.clientX - plotPending.startX;
@@ -520,7 +531,7 @@ export default function YardView({ isMobile }) {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, elementPending, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
 
   // Rotate a group of plots clockwise around their collective center
   const handleRotatePlots = useCallback((plotIds, degrees = 45) => {
@@ -564,7 +575,10 @@ export default function YardView({ isMobile }) {
       setDraggingVertex(null);
       return;
     }
-    // Cancel pending drag (was just a click, not a drag)
+    // Cancel pending drags (was just a click, not a drag)
+    if (elementPending) {
+      setElementPending(null);
+    }
     if (plotPending) {
       setPlotPending(null);
     }
@@ -592,7 +606,7 @@ export default function YardView({ isMobile }) {
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, rotatingPlot, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
+  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, rotatingPlot, elementPending, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
@@ -2411,7 +2425,7 @@ export default function YardView({ isMobile }) {
                       e.preventDefault();
                       setSelectedYardElement(el.id);
                       const svg = toSVG(e.clientX, e.clientY);
-                      setDraggingYardElement({ id: el.id, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
+                      setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                     }}
                   >
                     {/* Clip path for polygon shape */}
@@ -2630,7 +2644,8 @@ export default function YardView({ isMobile }) {
                         return;
                       }
                     }
-                    setDraggingYardElement({ id: el.id, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
+                    // Don't start drag immediately — wait for threshold
+                    setElementPending({ id: el.id, startX: e.clientX, startY: e.clientY, offsetX: toFt(svg.x) - el.x, offsetY: toFt(svg.y) - el.y });
                   }}
                 >
                   {/* Larger invisible hit area — extra padding for narrow elements */}
