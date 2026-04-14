@@ -2040,24 +2040,31 @@ export default function YardView({ isMobile }) {
                 )}
                 <polygon
                   points={state.yardPolygon.map(p => `${p.x * SCALE},${p.y * SCALE}`).join(' ')}
-                  fill="none" stroke={editingYardOutline ? "#C17644" : showSatellite ? "#fff" : "#5A8A3A"}
-                  strokeWidth={editingYardOutline ? 2 / zoom : 1.5} strokeLinejoin="round"
-                  strokeDasharray={editingYardOutline ? `${6 / zoom} ${3 / zoom}` : 'none'}
-                  opacity={editingYardOutline ? 0.9 : showSatellite ? 0.4 : 1}
+                  fill="none" stroke={editingYardOutline ? "#FF6B35" : showSatellite ? "#fff" : "#5A8A3A"}
+                  strokeWidth={editingYardOutline ? 3 / zoom : 1.5} strokeLinejoin="round"
+                  strokeDasharray={editingYardOutline ? `${8 / zoom} ${4 / zoom}` : 'none'}
+                  opacity={editingYardOutline ? 1 : showSatellite ? 0.4 : 1}
                 />
                 {/* Yard vertex handles — when editing */}
                 {editingYardOutline && state.yardPolygon.map((p, i) => (
                   <g key={`yv-${i}`}>
                     <circle
                       cx={p.x * SCALE} cy={p.y * SCALE}
-                      r={12 / zoom}
+                      r={16 / zoom}
                       fill="transparent"
                       style={{ cursor: draggingYardVertex === i ? 'grabbing' : 'grab', pointerEvents: 'all' }}
                     />
+                    {/* Glow ring for visibility */}
                     <circle
                       cx={p.x * SCALE} cy={p.y * SCALE}
-                      r={6 / zoom}
-                      fill="#5A8A3A" stroke="#FDF6E9" strokeWidth={2 / zoom}
+                      r={10 / zoom}
+                      fill="#FF6B35" opacity={0.25}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    <circle
+                      cx={p.x * SCALE} cy={p.y * SCALE}
+                      r={7 / zoom}
+                      fill="#FF6B35" stroke="#FDF6E9" strokeWidth={2.5 / zoom}
                       style={{ pointerEvents: 'none' }}
                     />
                   </g>
