@@ -220,7 +220,7 @@ export default function YardView({ isMobile }) {
   // --- Mouse Handlers ---
 
   const handleMouseDown = useCallback((e) => {
-    if (draggingVertex || draggingHouseVertex || draggingElementVertex || movingPlot || draggingYardElement || elementPending || resizingYardElement || rotatingYardElement) return;
+    if (draggingVertex || draggingHouseVertex || draggingElementVertex || draggingSmoothVertex || movingPlot || draggingYardElement || elementPending || resizingYardElement || rotatingYardElement) return;
 
     // House polygon vertex editing
     if (editingHouse && state.housePolygon && zoom !== null && panOffset) {
@@ -567,7 +567,7 @@ export default function YardView({ isMobile }) {
     if (isPanning) {
       setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
-  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, elementPending, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, dispatch]);
+  }, [draggingVertex, draggingHouseVertex, draggingElementVertex, draggingSmoothVertex, draggingHouseFeature, draggingYardElement, resizingYardElement, rotatingYardElement, rotatingPlot, elementPending, plotPending, movingPlot, isPanning, panStart, toSVG, state.plots, state.housePolygon, state.yardElements, zoom, panOffset, drawingBed, dispatch]);
 
   // Rotate a group of plots clockwise around their collective center
   const handleRotatePlots = useCallback((plotIds, degrees = 45) => {
@@ -643,7 +643,7 @@ export default function YardView({ isMobile }) {
       setMoveOffset(null);
       return;
     }
-  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingVertex, rotatingPlot, elementPending, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
+  }, [draggingHouseVertex, draggingHouseFeature, draggingElementVertex, draggingSmoothVertex, draggingVertex, rotatingPlot, elementPending, plotPending, movingPlot, moveOffset, state.plots, dispatch, handleRotatePlots]);
 
   // Attach wheel listener as non-passive so preventDefault works for pinch-to-zoom
   useEffect(() => {
