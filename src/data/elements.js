@@ -127,6 +127,17 @@ export const ELEMENTS = [
     circular: true,
     resizable: true,
   },
+  {
+    id: 'outdoor-kitchen',
+    name: 'Outdoor Kitchen',
+    category: 'hardscape',
+    widthIn: 96,
+    heightIn: 30,
+    color: '#B8AAA0',
+    borderColor: '#7A6A5A',
+    description: 'Built-in grill + counter with side burner and prep space',
+    resizable: true,
+  },
 
   // Paths
   {

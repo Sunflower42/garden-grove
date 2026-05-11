@@ -526,6 +526,107 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
           <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.3} ry={h * 0.3} fill="#4A2A1A" opacity={0.6} />
           <ellipse cx={px + w / 2} cy={py + h / 2} rx={w * 0.15} ry={h * 0.15} fill="#D4644A" opacity={0.4} />
         </g>
+      ) : element.id === 'outdoor-kitchen' ? (
+        // Outdoor kitchen — counter run with built-in grill, side burner, prep area (top-down)
+        (() => {
+          const horizontal = w >= h;
+          const longLen = horizontal ? w : h;
+          const shortLen = horizontal ? h : w;
+          // Layout along the long axis (left→right or top→bottom)
+          // 0.00–0.10 : end cap / counter
+          // 0.10–0.40 : grill (30%)
+          // 0.40–0.55 : counter
+          // 0.55–0.70 : side burner (15%)
+          // 0.70–1.00 : prep counter
+          const seg = (t0, t1) => {
+            if (horizontal) {
+              return { x: px + longLen * t0, y: py, width: longLen * (t1 - t0), height: shortLen };
+            }
+            return { x: px, y: py + longLen * t0, width: shortLen, height: longLen * (t1 - t0) };
+          };
+          const grill = seg(0.10, 0.40);
+          const burner = seg(0.55, 0.70);
+          const grateCount = 5;
+          return (
+            <g>
+              {/* Counter base (stone/concrete) */}
+              <rect x={px} y={py} width={w} height={h}
+                fill={element.color} stroke={element.borderColor} strokeWidth={1.5} rx={1.5} opacity={0.92} />
+              {/* Stone texture flecks */}
+              {Array.from({ length: Math.max(4, Math.floor(w * h / 400)) }).map((_, i) => {
+                const rng = seededRandom(i + 1);
+                const cx = px + 2 + rng() * (w - 4);
+                const cy = py + 2 + rng() * (h - 4);
+                const r = 0.4 + rng() * 0.8;
+                return <circle key={`f${i}`} cx={cx} cy={cy} r={r} fill={element.borderColor} opacity={0.25} />;
+              })}
+              {/* Counter seam (subtle line splitting top edge / backsplash) */}
+              {horizontal ? (
+                <line x1={px + 1} y1={py + h * 0.18} x2={px + w - 1} y2={py + h * 0.18}
+                  stroke={element.borderColor} strokeWidth={0.6} opacity={0.4} />
+              ) : (
+                <line x1={px + w * 0.18} y1={py + 1} x2={px + w * 0.18} y2={py + h - 1}
+                  stroke={element.borderColor} strokeWidth={0.6} opacity={0.4} />
+              )}
+              {/* Grill housing (dark) */}
+              <rect x={grill.x + 1} y={grill.y + 1} width={grill.width - 2} height={grill.height - 2}
+                fill="#2A2A2A" stroke="#1A1A1A" strokeWidth={1} rx={1.5} opacity={0.95} />
+              {/* Grill hood lip */}
+              <rect
+                x={grill.x + 1.5}
+                y={grill.y + 1.5}
+                width={horizontal ? grill.width - 3 : grill.width * 0.25}
+                height={horizontal ? grill.height * 0.25 : grill.height - 3}
+                fill="#3A3A3A" opacity={0.7} rx={1}
+              />
+              {/* Grill grates */}
+              {Array.from({ length: grateCount }).map((_, i) => {
+                const t = (i + 0.5) / grateCount;
+                if (horizontal) {
+                  const gx = grill.x + grill.width * t;
+                  return (
+                    <line key={`g${i}`}
+                      x1={gx} y1={grill.y + grill.height * 0.30}
+                      x2={gx} y2={grill.y + grill.height * 0.92}
+                      stroke="#7A7A7A" strokeWidth={0.7} opacity={0.85} />
+                  );
+                }
+                const gy = grill.y + grill.height * t;
+                return (
+                  <line key={`g${i}`}
+                    x1={grill.x + grill.width * 0.30} y1={gy}
+                    x2={grill.x + grill.width * 0.92} y2={gy}
+                    stroke="#7A7A7A" strokeWidth={0.7} opacity={0.85} />
+                );
+              })}
+              {/* Grill control knobs */}
+              {[0.25, 0.5, 0.75].map((t, i) => {
+                const cx = horizontal ? grill.x + grill.width * t : grill.x + grill.width * 0.85;
+                const cy = horizontal ? grill.y + grill.height * 0.88 : grill.y + grill.height * t;
+                const r = Math.min(grill.width, grill.height) * 0.05;
+                return <circle key={`k${i}`} cx={cx} cy={cy} r={Math.max(0.6, r)} fill="#D4D4D4" stroke="#5A5A5A" strokeWidth={0.3} opacity={0.9} />;
+              })}
+              {/* Side burner housing */}
+              <rect x={burner.x + 1} y={burner.y + 1} width={burner.width - 2} height={burner.height - 2}
+                fill="#3A3A3A" stroke="#1A1A1A" strokeWidth={0.8} rx={1} opacity={0.92} />
+              {/* Burner ring */}
+              <circle
+                cx={burner.x + burner.width / 2}
+                cy={burner.y + burner.height / 2}
+                r={Math.min(burner.width, burner.height) * 0.30}
+                fill="none" stroke="#7A7A7A" strokeWidth={0.8} opacity={0.85}
+              />
+              <circle
+                cx={burner.x + burner.width / 2}
+                cy={burner.y + burner.height / 2}
+                r={Math.min(burner.width, burner.height) * 0.15}
+                fill="#D4644A" opacity={0.55}
+              />
+              {/* Outline */}
+              <rect x={px} y={py} width={w} height={h} fill="none" stroke={element.borderColor} strokeWidth={1.5} rx={1.5} opacity={0.9} />
+            </g>
+          );
+        })()
       ) : element.id === 'garden-bench' || element.id === 'swing' ? (
         // Bench / swing — seat plank + backrest
         <g>
