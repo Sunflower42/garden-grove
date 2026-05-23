@@ -1061,6 +1061,89 @@ export function ElementSVG({ element, x, y, width, height, cellSize, isSelected,
           {/* Outline */}
           <rect x={px} y={py} width={w} height={h} fill="none" stroke="#6B4B2A" strokeWidth={1} rx={1} opacity={0.6} />
         </g>
+      ) : element.id === 'outdoor-shower' ? (
+        // Outdoor shower — top-down: teak slat pad, privacy walls on 2 sides,
+        // shower head fixture, water spray
+        (() => {
+          const wallThk = Math.max(2, Math.min(w, h) * 0.08);
+          // Pad inset so the walls sit on the top + left edges
+          const padX = px + wallThk;
+          const padY = py + wallThk;
+          const padW = Math.max(1, w - wallThk);
+          const padH = Math.max(1, h - wallThk);
+          const slatCount = Math.max(3, Math.floor(padH / 4));
+          const headCx = px + wallThk * 0.6;
+          const headCy = py + wallThk * 0.6;
+          return (
+            <g>
+              {/* Subtle ground shadow */}
+              <rect x={px + 1} y={py + 1} width={w} height={h} fill="#000" opacity={0.08} rx={1.5} />
+              {/* Teak slat pad */}
+              <rect x={padX} y={padY} width={padW} height={padH}
+                fill="#A88A5A" stroke="#7A5A3A" strokeWidth={1} rx={1.5} opacity={0.92} />
+              {/* Slat lines */}
+              {Array.from({ length: slatCount }).map((_, i) => {
+                const sy = padY + (i + 1) * (padH / (slatCount + 1));
+                return (
+                  <line key={`sl-${i}`} x1={padX + 1} y1={sy} x2={padX + padW - 1} y2={sy}
+                    stroke="#6B4B2A" strokeWidth={0.5} opacity={0.55} />
+                );
+              })}
+              {/* Center drain */}
+              <circle cx={padX + padW / 2} cy={padY + padH / 2}
+                r={Math.min(padW, padH) * 0.07} fill="#3A2A1A" opacity={0.7} />
+              <circle cx={padX + padW / 2} cy={padY + padH / 2}
+                r={Math.min(padW, padH) * 0.07} fill="none" stroke="#8A7A5A" strokeWidth={0.4} opacity={0.6} />
+              {/* Privacy wall — top edge */}
+              <rect x={px} y={py} width={w} height={wallThk}
+                fill={element.color} stroke={element.borderColor} strokeWidth={1} rx={1} opacity={0.95} />
+              {/* Privacy wall — left edge */}
+              <rect x={px} y={py} width={wallThk} height={h}
+                fill={element.color} stroke={element.borderColor} strokeWidth={1} rx={1} opacity={0.95} />
+              {/* Wall plank lines (top wall — vertical grain) */}
+              {Array.from({ length: Math.max(2, Math.floor(w / 6)) }).map((_, i) => {
+                const lx = px + 2 + i * 6;
+                if (lx >= px + w - 1) return null;
+                return <line key={`tw-${i}`} x1={lx} y1={py + 0.5} x2={lx} y2={py + wallThk - 0.5}
+                  stroke={element.borderColor} strokeWidth={0.4} opacity={0.5} />;
+              })}
+              {/* Wall plank lines (left wall — horizontal grain) */}
+              {Array.from({ length: Math.max(2, Math.floor(h / 6)) }).map((_, i) => {
+                const ly = py + 2 + i * 6;
+                if (ly >= py + h - 1) return null;
+                return <line key={`lw-${i}`} x1={px + 0.5} y1={ly} x2={px + wallThk - 0.5} y2={ly}
+                  stroke={element.borderColor} strokeWidth={0.4} opacity={0.5} />;
+              })}
+              {/* Shower head fixture at corner */}
+              <circle cx={headCx} cy={headCy}
+                r={Math.max(1.5, wallThk * 0.55)}
+                fill="#C8CCD0" stroke="#6A7078" strokeWidth={0.6} opacity={0.95} />
+              <circle cx={headCx} cy={headCy}
+                r={Math.max(0.6, wallThk * 0.22)}
+                fill="#3A4048" opacity={0.85} />
+              {/* Water spray — small droplets fanning out toward pad center */}
+              {(() => {
+                const drops = [];
+                const dropCount = 7;
+                const maxDist = Math.min(padW, padH) * 0.55;
+                for (let i = 0; i < dropCount; i++) {
+                  const t = (i + 1) / (dropCount + 1);
+                  // Spread along diagonal from head into pad
+                  const angle = (Math.PI * 0.18) + t * (Math.PI * 0.14);
+                  const dist = maxDist * (0.35 + t * 0.65);
+                  const dx = headCx + Math.cos(angle) * dist;
+                  const dy = headCy + Math.sin(angle) * dist;
+                  drops.push(
+                    <circle key={`dr-${i}`} cx={dx} cy={dy}
+                      r={0.6 + (i % 3) * 0.25}
+                      fill="#7EC4E8" opacity={0.7 - t * 0.25} />
+                  );
+                }
+                return drops;
+              })()}
+            </g>
+          );
+        })()
       ) : element.id === 'beehive' ? (
         // Langstroth beehive — stacked boxes with landing board
         <g>

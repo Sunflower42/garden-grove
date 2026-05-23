@@ -138,6 +138,17 @@ export const ELEMENTS = [
     description: 'Built-in grill + counter with side burner and prep space',
     resizable: true,
   },
+  {
+    id: 'outdoor-shower',
+    name: 'Outdoor Shower',
+    category: 'hardscape',
+    widthIn: 42,
+    heightIn: 42,
+    color: '#9A7A5A',
+    borderColor: '#6B4B2A',
+    description: 'Teak-slat pad with privacy walls — rinse off after pool or garden',
+    resizable: true,
+  },
 
   // Paths
   {
