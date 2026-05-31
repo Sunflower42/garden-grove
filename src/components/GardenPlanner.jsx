@@ -602,7 +602,8 @@ function PlotEditor({ isMobile }) {
   const handleResizeMouseDown = useCallback((elemId, e) => {
     e.stopPropagation();
     e.preventDefault();
-    const el = activePlot.elements.find(el => el.id === elemId);
+    const ownerPlot = findPlotForItem('element', elemId);
+    const el = ownerPlot?.elements.find(el => el.id === elemId);
     if (!el) return;
     setResizing({
       id: elemId,
@@ -611,7 +612,7 @@ function PlotEditor({ isMobile }) {
       startMouseX: e.clientX,
       startMouseY: e.clientY,
     });
-  }, [activePlot]);
+  }, [findPlotForItem]);
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return;
