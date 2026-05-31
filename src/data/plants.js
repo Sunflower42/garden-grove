@@ -1289,13 +1289,20 @@ export const PLANTS = [
   },
 ];
 
-export const getPlantById = (id) => PLANTS.find(p => p.id === id);
-export const getPlantsByCategory = (cat) => PLANTS.filter(p => p.category === cat);
+// Custom plants registry — StoreProvider syncs from state.customPlants on every change
+let CUSTOM_PLANTS = [];
+export const setCustomPlantsCache = (list) => { CUSTOM_PLANTS = Array.isArray(list) ? list : []; };
+export const getCustomPlants = () => CUSTOM_PLANTS;
+
+export const getPlantById = (id) =>
+  PLANTS.find(p => p.id === id) || CUSTOM_PLANTS.find(p => p.id === id);
+export const getPlantsByCategory = (cat) =>
+  [...PLANTS, ...CUSTOM_PLANTS].filter(p => p.category === cat);
 export const searchPlants = (query) => {
   const q = query.toLowerCase();
-  return PLANTS.filter(p =>
+  return [...PLANTS, ...CUSTOM_PLANTS].filter(p =>
     p.name.toLowerCase().includes(q) ||
-    p.variety.toLowerCase().includes(q) ||
+    (p.variety || '').toLowerCase().includes(q) ||
     p.category.toLowerCase().includes(q)
   );
 };

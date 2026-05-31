@@ -760,6 +760,7 @@ function PlotEditor({ isMobile }) {
   }, [selectedId, selectedType, activePlot]);
 
   // Compute element positions with live resize/move overlays
+  // Returns plot-local pixel coords; render site adds _offsetX/Y * CELL_SIZE for quadrant view
   const getElementPosition = useCallback((elem) => {
     let x = elem.x * CELL_SIZE;
     let y = elem.y * CELL_SIZE;
@@ -767,8 +768,9 @@ function PlotEditor({ isMobile }) {
     let h = elem.height * CELL_SIZE;
 
     if (movingItem?.type === 'element' && movingItem.id === elem.id && movePos) {
-      x = movePos.x;
-      y = movePos.y;
+      // movePos is in absolute SVG coords; convert back to plot-local so render-site offset add is correct
+      x = movePos.x - (elem._offsetX || 0) * CELL_SIZE;
+      y = movePos.y - (elem._offsetY || 0) * CELL_SIZE;
     }
     if (resizing?.id === elem.id && resizing.currentW !== undefined) {
       w = resizing.currentW * CELL_SIZE;
@@ -781,8 +783,8 @@ function PlotEditor({ isMobile }) {
     let x = p.x * CELL_SIZE;
     let y = p.y * CELL_SIZE;
     if (movingItem?.type === 'plant' && movingItem.id === p.id && movePos) {
-      x = movePos.x;
-      y = movePos.y;
+      x = movePos.x - (p._offsetX || 0) * CELL_SIZE;
+      y = movePos.y - (p._offsetY || 0) * CELL_SIZE;
     }
     return { x, y };
   }, [movingItem, movePos]);

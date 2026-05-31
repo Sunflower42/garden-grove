@@ -530,6 +530,184 @@ function AddPlantCard({ plant, onAdd, userZone, existingCount }) {
   );
 }
 
+// Form for creating a custom plant when search has no matches
+function CustomPlantForm({ initialName, onSave, onCancel }) {
+  const [name, setName] = useState(initialName || '');
+  const [category, setCategory] = useState('vegetable');
+  const [emoji, setEmoji] = useState('🌱');
+  const [days, setDays] = useState('');
+  const [spacing, setSpacing] = useState('');
+  const [height, setHeight] = useState('');
+  const [sun, setSun] = useState('full');
+
+  const canSave = name.trim().length > 0;
+
+  const handleSave = () => {
+    if (!canSave) return;
+    const spacingNum = parseInt(spacing, 10) || 12;
+    const heightNum = parseInt(height, 10) || 18;
+    onSave({
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: name.trim(),
+      variety: '',
+      category,
+      emoji: emoji.trim() || '🌱',
+      custom: true,
+      daysToMaturity: parseInt(days, 10) || 60,
+      spacingIn: spacingNum,
+      spreadIn: spacingNum,
+      heightIn: heightNum,
+      sun,
+      water: 'moderate',
+      zones: [3, 4, 5, 6, 7, 8, 9, 10],
+      deerResistance: 3,
+      companions: [],
+      avoid: [],
+      color: PLANT_CATEGORIES[category]?.color || '#8B9E7E',
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-midnight-green/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center"
+      style={{ padding: 24 }}
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ scale: 0.96, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.96, y: 10 }}
+        className="bg-cream dark:bg-midnight-sage rounded-2xl shadow-2xl w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-sage/15 dark:border-sage-dark/20" style={{ padding: '16px 20px' }}>
+          <h3 className="font-display text-lg font-semibold text-forest-deep dark:text-cream">Create new plant</h3>
+          <button onClick={onCancel} className="text-sage-dark/50 hover:text-sage-dark dark:text-sage/40 dark:hover:text-sage transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              autoFocus
+              className="w-full rounded-lg border border-sage/20 dark:border-sage-dark/25 bg-white dark:bg-midnight-green text-sm text-forest-deep dark:text-cream focus:outline-none focus:border-sage/40"
+              style={{ padding: '8px 12px' }}
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Category</label>
+            <div className="flex flex-wrap" style={{ gap: 6 }}>
+              {Object.entries(PLANT_CATEGORIES).map(([key, cat]) => (
+                <button
+                  key={key}
+                  onClick={() => setCategory(key)}
+                  className={`rounded-full text-[11px] font-medium transition-all ${
+                    category === key
+                      ? 'bg-forest text-cream'
+                      : 'bg-sage/10 text-sage-dark/60 dark:text-sage/50 hover:bg-sage/20'
+                  }`}
+                  style={{ padding: '5px 12px' }}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2" style={{ gap: 12 }}>
+            <div>
+              <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Emoji</label>
+              <input
+                type="text"
+                value={emoji}
+                onChange={e => setEmoji(e.target.value)}
+                maxLength={4}
+                className="w-full rounded-lg border border-sage/20 dark:border-sage-dark/25 bg-white dark:bg-midnight-green text-base text-center focus:outline-none focus:border-sage/40"
+                style={{ padding: '6px 12px' }}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Days to maturity</label>
+              <input
+                type="number"
+                value={days}
+                onChange={e => setDays(e.target.value)}
+                placeholder="60"
+                className="w-full rounded-lg border border-sage/20 dark:border-sage-dark/25 bg-white dark:bg-midnight-green text-sm text-forest-deep dark:text-cream focus:outline-none focus:border-sage/40"
+                style={{ padding: '8px 12px' }}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Spacing (in)</label>
+              <input
+                type="number"
+                value={spacing}
+                onChange={e => setSpacing(e.target.value)}
+                placeholder="12"
+                className="w-full rounded-lg border border-sage/20 dark:border-sage-dark/25 bg-white dark:bg-midnight-green text-sm text-forest-deep dark:text-cream focus:outline-none focus:border-sage/40"
+                style={{ padding: '8px 12px' }}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Height (in)</label>
+              <input
+                type="number"
+                value={height}
+                onChange={e => setHeight(e.target.value)}
+                placeholder="18"
+                className="w-full rounded-lg border border-sage/20 dark:border-sage-dark/25 bg-white dark:bg-midnight-green text-sm text-forest-deep dark:text-cream focus:outline-none focus:border-sage/40"
+                style={{ padding: '8px 12px' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-sage-dark/60 dark:text-sage/50" style={{ marginBottom: 4 }}>Sun</label>
+            <div className="flex" style={{ gap: 6 }}>
+              {[
+                { v: 'full', l: 'Full sun' },
+                { v: 'partial', l: 'Partial' },
+                { v: 'shade', l: 'Shade' },
+              ].map(o => (
+                <button
+                  key={o.v}
+                  onClick={() => setSun(o.v)}
+                  className={`flex-1 rounded-lg text-[11px] font-medium transition-all ${
+                    sun === o.v
+                      ? 'bg-bloom-yellow/30 text-forest-deep'
+                      : 'bg-sage/10 text-sage-dark/60 dark:text-sage/50 hover:bg-sage/20'
+                  }`}
+                  style={{ padding: '6px 10px' }}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-sage/15 dark:border-sage-dark/20" style={{ padding: '12px 20px', gap: 8 }}>
+          <button
+            onClick={onCancel}
+            className="text-xs font-medium text-sage-dark/60 dark:text-sage/50 hover:text-sage-dark dark:hover:text-sage transition-colors"
+            style={{ padding: '8px 14px' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!canSave}
+            className="rounded-xl text-xs font-semibold bg-gradient-to-b from-forest to-forest-deep text-cream hover:brightness-110 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center"
+            style={{ padding: '8px 16px', gap: 6 }}
+          >
+            <Check className="w-3.5 h-3.5" /> Create plant
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function SeedInventory() {
   const { state, dispatch } = useStore();
   const [search, setSearch] = useState('');
@@ -545,8 +723,17 @@ export default function SeedInventory() {
     [state.seedInventory]
   );
 
+  // Built-in catalog + user-created custom plants
+  const allPlants = useMemo(() =>
+    [...PLANTS, ...(state.customPlants || [])],
+    [state.customPlants]
+  );
+
+  // Custom-plant creation form state — null when closed; { initialName } when open
+  const [customPlantForm, setCustomPlantForm] = useState(null);
+
   const filteredPlants = useMemo(() => {
-    let plants = PLANTS;
+    let plants = allPlants;
     if (showZoneOnly && state.zone) {
       plants = plants.filter(p => p.zones.includes(state.zone));
     }
@@ -557,12 +744,12 @@ export default function SeedInventory() {
       const q = search.toLowerCase();
       plants = plants.filter(p =>
         p.name.toLowerCase().includes(q) ||
-        p.variety.toLowerCase().includes(q)
+        (p.variety || '').toLowerCase().includes(q)
       );
     }
     // Catalog shows all plants — users can add multiple varieties of each
     return plants;
-  }, [search, activeCategory, showZoneOnly, showInventoryOnly, state.zone, inventoryPlantIds]);
+  }, [allPlants, search, activeCategory, showZoneOnly, showInventoryOnly, state.zone, inventoryPlantIds]);
 
   // Filter inventory items
   const filteredInventory = useMemo(() => {
@@ -596,10 +783,10 @@ export default function SeedInventory() {
   const [quickShowVarietySuggestions, setQuickShowVarietySuggestions] = useState(false);
 
   const quickFilteredPlants = useMemo(() => {
-    if (!quickSearch) return PLANTS.slice(0, 8);
+    if (!quickSearch) return allPlants.slice(0, 8);
     const q = quickSearch.toLowerCase();
-    return PLANTS.filter(p => p.name.toLowerCase().includes(q) || p.variety.toLowerCase().includes(q)).slice(0, 8);
-  }, [quickSearch]);
+    return allPlants.filter(p => p.name.toLowerCase().includes(q) || (p.variety || '').toLowerCase().includes(q)).slice(0, 8);
+  }, [allPlants, quickSearch]);
 
   const quickVarietyInfo = useMemo(() => quickPlant ? lookupVariety(quickPlant.id, quickVariety) : null, [quickPlant, quickVariety]);
   const quickVarietySuggestions = useMemo(() => {
@@ -806,39 +993,67 @@ export default function SeedInventory() {
                   style={{ padding: '13px 18px 13px 44px' }}
                 />
                 {quickShowDropdown && search.length >= 1 && (
-                  <div className="absolute left-0 right-0 z-30 bg-white dark:bg-midnight-green rounded-xl shadow-xl border border-sage/15 dark:border-sage-dark/20 overflow-hidden" style={{ top: '100%', marginTop: 6, maxHeight: 280, overflowY: 'auto' }}>
+                  <div className="absolute left-0 right-0 z-30 bg-white dark:bg-midnight-green rounded-xl shadow-xl border border-sage/15 dark:border-sage-dark/20 overflow-hidden" style={{ top: '100%', marginTop: 6, maxHeight: 320, overflowY: 'auto' }}>
                     {/* Matching plants to add */}
                     {(() => {
                       const q = search.toLowerCase();
-                      const matches = PLANTS.filter(p => p.name.toLowerCase().includes(q) || p.variety.toLowerCase().includes(q)).slice(0, 8);
-                      if (matches.length === 0) return <div className="text-xs text-sage-dark/40 dark:text-sage/30" style={{ padding: '12px 16px' }}>No plants found</div>;
-                      return matches.map(p => {
-                        const count = state.seedInventory.filter(i => i.plantId === p.id).length;
-                        return (
-                          <button
-                            key={p.id}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setQuickPlant(p);
-                              setSearch('');
-                              setQuickShowDropdown(false);
-                            }}
-                            className="w-full text-left flex items-center hover:bg-sage/8 dark:hover:bg-sage/8 transition-colors"
-                            style={{ padding: '10px 16px', gap: 10 }}
-                          >
-                            <span className="text-base">{p.emoji}</span>
-                            <div className="flex-1">
-                              <span className="text-xs font-medium text-forest-deep dark:text-cream">{p.name}</span>
-                              {count > 0 && (
-                                <span className="text-[10px] text-terra dark:text-terra-light" style={{ marginLeft: 8 }}>{count} in collection</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-sage-dark/40 dark:text-sage/30 flex items-center" style={{ gap: 4 }}>
-                              <Plus className="w-3 h-3" /> Add
-                            </span>
-                          </button>
-                        );
-                      });
+                      const matches = allPlants.filter(p => p.name.toLowerCase().includes(q) || (p.variety || '').toLowerCase().includes(q)).slice(0, 8);
+                      const createBtn = (
+                        <button
+                          key="__create"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setCustomPlantForm({ initialName: search.trim() });
+                            setQuickShowDropdown(false);
+                          }}
+                          className="w-full text-left flex items-center border-t border-sage/10 dark:border-sage-dark/15 hover:bg-terra/8 dark:hover:bg-terra/12 transition-colors"
+                          style={{ padding: '10px 16px', gap: 10 }}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-terra/15 text-terra-dark dark:text-terra-light flex items-center justify-center">
+                            <Plus className="w-3 h-3" />
+                          </span>
+                          <div className="flex-1 text-xs">
+                            <span className="text-sage-dark/55 dark:text-sage/45">Create new plant </span>
+                            <span className="font-medium text-forest-deep dark:text-cream">"{search.trim()}"</span>
+                          </div>
+                        </button>
+                      );
+                      if (matches.length === 0) {
+                        return [
+                          <div key="__none" className="text-xs text-sage-dark/40 dark:text-sage/30" style={{ padding: '12px 16px' }}>No plants found in catalog</div>,
+                          createBtn,
+                        ];
+                      }
+                      return [
+                        ...matches.map(p => {
+                          const count = state.seedInventory.filter(i => i.plantId === p.id).length;
+                          return (
+                            <button
+                              key={p.id}
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setQuickPlant(p);
+                                setSearch('');
+                                setQuickShowDropdown(false);
+                              }}
+                              className="w-full text-left flex items-center hover:bg-sage/8 dark:hover:bg-sage/8 transition-colors"
+                              style={{ padding: '10px 16px', gap: 10 }}
+                            >
+                              <span className="text-base">{p.emoji}</span>
+                              <div className="flex-1">
+                                <span className="text-xs font-medium text-forest-deep dark:text-cream">{p.name}</span>
+                                {count > 0 && (
+                                  <span className="text-[10px] text-terra dark:text-terra-light" style={{ marginLeft: 8 }}>{count} in collection</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-sage-dark/40 dark:text-sage/30 flex items-center" style={{ gap: 4 }}>
+                                <Plus className="w-3 h-3" /> Add
+                              </span>
+                            </button>
+                          );
+                        }),
+                        createBtn,
+                      ];
                     })()}
                   </div>
                 )}
@@ -1152,6 +1367,22 @@ export default function SeedInventory() {
       {/* Seed Planting Checklist */}
       <AnimatePresence>
         {showChecklist && <SeedChecklist onClose={() => setShowChecklist(false)} />}
+      </AnimatePresence>
+
+      {/* Custom plant creation form */}
+      <AnimatePresence>
+        {customPlantForm && (
+          <CustomPlantForm
+            initialName={customPlantForm.initialName}
+            onCancel={() => setCustomPlantForm(null)}
+            onSave={(plant) => {
+              dispatch({ type: 'ADD_CUSTOM_PLANT', payload: plant });
+              setCustomPlantForm(null);
+              setSearch('');
+              setQuickPlant(plant);
+            }}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
