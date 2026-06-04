@@ -714,16 +714,16 @@ function PlotEditor({ isMobile }) {
   );
 
   const filteredPlants = useMemo(() => {
-    let plants = PLANTS;
+    let plants = [...PLANTS, ...(state.customPlants || [])];
     if (showMySeeds) {
       plants = plants.filter(p => myPlantIds.has(p.id));
     }
     if (paletteSearch) {
       const q = paletteSearch.toLowerCase();
-      plants = plants.filter(p => p.name.toLowerCase().includes(q) || p.variety.toLowerCase().includes(q));
+      plants = plants.filter(p => p.name.toLowerCase().includes(q) || (p.variety || '').toLowerCase().includes(q));
     }
     return plants;
-  }, [paletteSearch, showMySeeds, myPlantIds]);
+  }, [paletteSearch, showMySeeds, myPlantIds, state.customPlants]);
 
   const filteredElements = useMemo(() => {
     if (!paletteSearch) return ELEMENTS;
